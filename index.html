@@ -1667,6 +1667,8 @@ function getFromAddress(email){
   var f = parseFrom(email.from);
   return f.address || f.name;
 }
+
+function extractPartialNote(title){
   var m = title.match(/not available\s*(.{0,40})/i);
   return m ? m[0] : 'Partially unavailable — check details';
 }
