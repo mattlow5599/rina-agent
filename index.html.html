@@ -1,0 +1,1756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RINA Agent</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --sb:#003087;--sbt:rgba(255,255,255,0.62);--sbton:#fff;--sbbrd:rgba(255,255,255,0.1);
+  --sbhov:rgba(255,255,255,0.07);--sbact:rgba(255,255,255,0.13);--sbacc:#6EB3E0;
+  --bg1:#fff;--bg2:#F4F6FA;--bg3:#EBEEf5;--bg4:#DDE2EE;
+  --t1:#0D1B2A;--t2:#3D5166;--t3:#8A9DB0;
+  --b1:rgba(0,30,80,0.09);--b2:rgba(0,30,80,0.18);
+  --nv:#003087;--nvl:#E6EDF8;--nvm:#B8CCE8;--nvt:#003087;
+  --live:#34C759;--cbg:rgba(0,0,0,0.45);
+  --radius-md:8px;--radius-lg:12px;
+  font-family:'Inter',sans-serif;
+}
+body.dark{
+  --sb:#051628;--sbt:rgba(255,255,255,0.48);--sbton:#fff;--sbbrd:rgba(255,255,255,0.07);
+  --sbhov:rgba(255,255,255,0.05);--sbact:rgba(255,255,255,0.1);--sbacc:#6EB3E0;
+  --bg1:#0D1F33;--bg2:#081628;--bg3:#112338;--bg4:#1A3050;
+  --t1:#E4EFF8;--t2:#7A9CB8;--t3:#3D5A72;
+  --b1:rgba(255,255,255,0.07);--b2:rgba(255,255,255,0.14);
+  --nv:#5BAEE0;--nvl:rgba(91,174,224,0.12);--nvm:rgba(91,174,224,0.22);--nvt:#5BAEE0;
+  --live:#34C759;--cbg:rgba(0,0,0,0.65);
+}
+body{background:var(--bg2);min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;}
+
+/* ── Layout ── */
+.app{display:flex;width:100%;max-width:1100px;min-height:calc(100vh - 48px);border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--b1);}
+
+/* ── Sidebar ── */
+.sidebar{width:230px;background:var(--sb);display:flex;flex-direction:column;flex-shrink:0;}
+.sb-brand{border-bottom:1px solid var(--sbbrd);}
+.sb-brand-inner{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;}
+.sb-brand-left{display:flex;align-items:center;gap:10px;min-width:0;}
+.sb-ship{font-size:22px;color:rgba(255,255,255,0.45);flex-shrink:0;line-height:1;}
+.sb-divider{width:1px;height:30px;background:rgba(255,255,255,0.14);flex-shrink:0;}
+.sb-texts{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.sb-name{font-size:13px;font-weight:600;color:#fff;white-space:nowrap;}
+.sb-sub{font-size:10px;color:rgba(255,255,255,0.36);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-thm{width:27px;height:27px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+.sb-thm:hover{background:rgba(255,255,255,0.14);}
+.sb-thm svg{width:14px;height:14px;stroke:rgba(255,255,255,0.6);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.ng{padding:8px 0 2px;}
+.ngl{font-size:9px;font-weight:600;color:rgba(255,255,255,0.27);letter-spacing:0.09em;text-transform:uppercase;padding:2px 16px 5px;}
+.ni{display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:12px;color:var(--sbt);cursor:pointer;border-left:2px solid transparent;transition:background 0.12s,color 0.12s;user-select:none;}
+.ni:hover{background:var(--sbhov);color:var(--sbton);}
+.ni.on{background:var(--sbact);color:var(--sbton);border-left-color:var(--sbacc);}
+.ni svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
+.nb{font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;margin-left:auto;}
+.nba{background:var(--sbacc);color:#fff;}
+.nbw{background:rgba(255,255,255,0.16);color:rgba(255,255,255,0.8);}
+.sb-foot{margin-top:auto;padding:12px 14px;border-top:1px solid var(--sbbrd);}
+.sf{display:flex;align-items:center;gap:9px;}
+.sfav{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;flex-shrink:0;border:1px solid rgba(255,255,255,0.18);}
+.sfn{font-size:11px;color:rgba(255,255,255,0.85);font-weight:500;}
+.sfr{font-size:10px;color:rgba(255,255,255,0.33);}
+.live-pill{display:flex;align-items:center;gap:5px;margin-top:8px;padding:4px 8px;background:rgba(255,255,255,0.06);border-radius:20px;border:1px solid rgba(255,255,255,0.09);}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--live);flex-shrink:0;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.35;}}
+.live-txt{font-size:10px;color:rgba(255,255,255,0.4);}
+
+/* ── Main ── */
+.main{flex:1;display:flex;flex-direction:column;background:var(--bg2);position:relative;min-width:0;}
+.topbar{height:52px;padding:0 20px;background:var(--bg1);border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.tb-l{display:flex;align-items:center;gap:10px;}
+.tb-ic{width:30px;height:30px;border-radius:var(--radius-md);background:var(--nvl);display:flex;align-items:center;justify-content:center;}
+.tb-ic svg{width:15px;height:15px;stroke:var(--nvt);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.tb-title{font-size:13px;font-weight:600;color:var(--t1);}
+.tb-sub{font-size:11px;color:var(--t3);margin-top:1px;}
+.tb-r{display:flex;gap:8px;align-items:center;}
+.live-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t3);padding:4px 10px;border-radius:20px;border:1px solid var(--b1);background:var(--bg2);}
+.live-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--live);animation:pulse 2s infinite;}
+.tb-btn{display:flex;align-items:center;gap:5px;font-size:11px;padding:5px 12px;border-radius:var(--radius-md);border:1px solid var(--b2);background:transparent;color:var(--t2);cursor:pointer;font-family:inherit;}
+.tb-btn:hover{background:var(--bg3);}
+.tb-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+
+/* ── Content ── */
+.content{flex:1;overflow-y:auto;padding:16px 20px;}
+.screen{display:none;}
+.screen.on{display:block;}
+
+/* ── Stats ── */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px;}
+.stat{background:var(--bg1);border:1px solid var(--b1);border-radius:var(--radius-md);padding:10px 12px;}
+.stat-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:0.05em;}
+.stat-val{font-size:22px;font-weight:600;color:var(--t1);margin-top:2px;}
+.stat-val.hl{color:var(--nvt);}
+
+/* ── Filter chips ── */
+.chips{display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;}
+.chip{font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid var(--b2);background:transparent;color:var(--t2);cursor:pointer;font-family:inherit;}
+.chip.on{background:var(--nv);color:#fff;border-color:var(--nv);}
+.chip:hover:not(.on){background:var(--bg3);}
+
+/* ── Email list ── */
+.elist{display:flex;flex-direction:column;gap:4px;}
+.ec{display:flex;align-items:stretch;border:1px solid var(--b1);border-radius:var(--radius-md);background:var(--bg1);cursor:pointer;overflow:hidden;transition:border-color 0.13s;}
+.ec:hover{border-color:var(--b2);}
+.ec.unread{border-left:3px solid var(--nv);}
+.ec.flagged{border-left:3px solid var(--t3);}
+.ei{display:flex;align-items:flex-start;gap:9px;padding:9px 12px;flex:1;min-width:0;}
+.eic{width:30px;height:30px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.eic svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.em{flex:1;min-width:0;}
+.efr{font-size:12px;font-weight:600;color:var(--t1);}
+.esub{font-size:11px;color:var(--t2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.etags{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap;}
+.tag{font-size:10px;padding:2px 7px;border-radius:10px;font-weight:500;}
+.t-sv{background:#E6EDF8;color:#003087;}
+body.dark .t-sv{background:rgba(91,174,224,0.15);color:#7DC4F0;}
+.t-pl{background:#EEEDFE;color:#534AB7;}
+body.dark .t-pl{background:rgba(175,169,236,0.15);color:#AFA9EC;}
+.t-uw{background:#E1F5EE;color:#0F6E56;}
+body.dark .t-uw{background:rgba(93,202,165,0.15);color:#5DCAA5;}
+.t-cl{background:#F1EFE8;color:#5F5E5A;}
+body.dark .t-cl{background:rgba(180,178,169,0.15);color:#B4B2A9;}
+.t-ex{background:#FAEEDA;color:#854F0B;}
+body.dark .t-ex{background:rgba(250,199,117,0.15);color:#FAC775;}
+.t-fl{background:#F1EFE8;color:#888780;}
+body.dark .t-fl{background:rgba(136,135,128,0.12);color:#888780;}
+.t-hp{background:#003087;color:#fff;}
+body.dark .t-hp{background:var(--nv);color:#fff;}
+.er{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;padding:9px 12px 9px 0;flex-shrink:0;}
+.etm{font-size:10px;color:var(--t3);}
+.udot{width:7px;height:7px;border-radius:50%;background:var(--nv);}
+
+/* ── Section label ── */
+.slbl{font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.07em;margin:0 0 8px;}
+
+/* ── Workflow card ── */
+.wfc{border:1px solid var(--b1);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;background:var(--bg1);}
+.wfh{background:var(--nv);padding:13px 16px;display:flex;align-items:center;gap:10px;}
+body.dark .wfh{background:var(--bg3);border-bottom:1px solid var(--b1);}
+.wfhi{width:32px;height:32px;background:rgba(255,255,255,0.12);border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.wfhi svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+body.dark .wfhi{background:var(--nvl);}
+body.dark .wfhi svg{stroke:var(--nvt);}
+.wft{font-size:13px;font-weight:600;color:#fff;}
+body.dark .wft{color:var(--t1);}
+.wfs{font-size:11px;color:rgba(255,255,255,0.5);margin-top:1px;}
+body.dark .wfs{color:var(--t3);}
+.wfbdg{margin-left:auto;font-size:10px;background:rgba(255,255,255,0.15);color:#fff;padding:3px 9px;border-radius:10px;white-space:nowrap;}
+body.dark .wfbdg{background:var(--nvm);color:var(--nvt);}
+.wfb{padding:14px 16px;}
+
+/* ── Steps ── */
+.steps{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;}
+.step{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:var(--radius-md);border:1px solid var(--b1);}
+.step.done{background:var(--bg2);opacity:0.6;}
+.step.active{border-color:var(--nv);background:var(--nvl);}
+.step.pending{background:var(--bg2);}
+.snum{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0;margin-top:1px;}
+.sn-done{background:#2D6A4F;color:#fff;}
+.sn-active{background:var(--nv);color:#fff;}
+.sn-pending{background:var(--bg3);color:var(--t3);border:1px solid var(--b2);}
+.snum svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
+.stit{font-size:12px;font-weight:600;color:var(--t1);}
+.step.done .stit{color:var(--t3);}
+.sdsc{font-size:11px;color:var(--t2);margin-top:2px;}
+
+/* ── Draft box ── */
+.draft-wrap{border:1px solid var(--nvm);border-radius:var(--radius-md);overflow:hidden;margin-bottom:10px;}
+.draft-hdr{background:var(--nvl);border-bottom:1px solid var(--b1);padding:7px 12px;display:flex;align-items:center;gap:7px;}
+.draft-hdr svg{width:13px;height:13px;stroke:var(--nvt);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.draft-hdr-lbl{font-size:11px;font-weight:600;color:var(--nvt);}
+.draft-to{font-size:10px;color:var(--t3);margin-left:auto;}
+.draft-body{padding:12px 14px;font-size:12px;color:var(--t2);line-height:1.85;background:var(--bg1);white-space:pre-wrap;}
+.draft-ph{color:#854F0B;font-style:italic;}
+body.dark .draft-ph{color:#FAC775;}
+.draft-hint{font-size:10px;color:var(--t3);padding:7px 14px 10px;display:flex;align-items:center;gap:5px;border-top:1px solid var(--b1);background:var(--bg2);}
+.draft-hint svg{width:12px;height:12px;stroke:var(--t3);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
+
+/* ── Action row ── */
+.arow{display:flex;gap:6px;flex-wrap:wrap;}
+.btn{display:flex;align-items:center;gap:5px;font-size:11px;padding:6px 12px;border-radius:var(--radius-md);cursor:pointer;border:1px solid var(--b2);background:transparent;color:var(--t1);font-family:inherit;transition:background 0.13s;}
+.btn:hover{background:var(--bg3);}
+.btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.btn-n{background:var(--nv);color:#fff;border-color:var(--nv);}
+.btn-n:hover{opacity:0.88;}
+.btn-ol{border-color:var(--nvm);color:var(--nvt);}
+.btn-ol:hover{background:var(--nvl);}
+
+/* ── Availability ── */
+.av-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.av-date{font-size:13px;font-weight:600;color:var(--t1);}
+.av-win{font-size:11px;color:var(--t2);margin-top:2px;}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:8px 12px;background:var(--bg1);border:1px solid var(--b1);border-radius:var(--radius-md);}
+.li{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--t2);}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.ag{margin-bottom:14px;}
+.ag-hdr{display:flex;align-items:center;gap:7px;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid var(--b1);}
+.ag-t{font-size:11px;font-weight:600;}
+.ag-c{font-size:10px;color:var(--t3);margin-left:auto;}
+.scard{display:flex;align-items:flex-start;gap:9px;padding:8px 12px;border-radius:var(--radius-md);border:1px solid var(--b1);margin-bottom:4px;background:var(--bg1);cursor:pointer;transition:border-color 0.13s;}
+.scard:hover{border-color:var(--b2);}
+.scard.sel{border-color:var(--nv);background:var(--nvl);}
+.sdot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.sname{font-size:12px;font-weight:600;color:var(--t1);min-width:64px;}
+.sinfo{flex:1;font-size:11px;color:var(--t2);line-height:1.5;}
+.stag{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500;white-space:nowrap;flex-shrink:0;margin-left:auto;background:var(--nvl);color:var(--nvt);}
+
+/* ── Notifications ── */
+.notif-list{display:flex;flex-direction:column;gap:5px;}
+.nc{border:1px solid var(--b1);border-radius:var(--radius-lg);padding:11px 13px;display:flex;gap:10px;background:var(--bg1);}
+.nc.hp{border-left:3px solid var(--nv);}
+.nc-ico{width:34px;height:34px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.nc-ico svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.nc-body{flex:1;min-width:0;}
+.nc-title{font-size:12px;font-weight:600;color:var(--t1);}
+.nc-text{font-size:11px;color:var(--t2);margin-top:2px;line-height:1.5;}
+.nc-time{font-size:10px;color:var(--t3);margin-top:3px;}
+.nc-acts{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap;align-items:center;}
+.nb2{font-size:10px;padding:4px 10px;border-radius:var(--radius-md);cursor:pointer;border:1px solid var(--b2);background:transparent;color:var(--t1);font-family:inherit;transition:background 0.13s;}
+.nb2:hover{background:var(--bg3);}
+.nb2-n{background:var(--nv);color:#fff;border-color:var(--nv);}
+.nb2-n:hover{opacity:0.88;}
+.dismiss-btn{font-size:10px;padding:4px 10px;border-radius:var(--radius-md);cursor:pointer;border:1px solid var(--b2);background:transparent;color:var(--t3);transition:background 0.25s,color 0.25s,border-color 0.25s;font-family:inherit;}
+.dismiss-btn:hover{background:rgba(180,28,28,0.08);color:#B91C1C;border-color:#B91C1C;}
+.tdiv{font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.07em;margin:12px 0 6px;padding-bottom:5px;border-bottom:1px solid var(--b1);}
+
+/* ── Confirm overlay ── */
+.confirm-overlay{display:none;position:absolute;inset:0;background:var(--cbg);z-index:20;align-items:center;justify-content:center;}
+.confirm-overlay.show{display:flex;}
+.confirm-box{background:var(--bg1);border:1px solid var(--b2);border-radius:var(--radius-lg);padding:20px 22px;width:290px;}
+.confirm-title{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:6px;}
+.confirm-sub{font-size:12px;color:var(--t2);line-height:1.5;margin-bottom:16px;}
+.confirm-row{display:flex;gap:8px;justify-content:flex-end;}
+.cbtn{font-size:11px;padding:6px 14px;border-radius:var(--radius-md);cursor:pointer;border:1px solid var(--b2);background:transparent;color:var(--t1);font-family:inherit;}
+.cbtn:hover{background:var(--bg3);}
+.cbtn-del{background:#B91C1C;color:#fff;border-color:#B91C1C;}
+.cbtn-del:hover{background:#9B1212;}
+
+/* ── Email detail panel ── */
+.email-detail{background:var(--bg1);border:1px solid var(--b1);border-radius:var(--radius-lg);margin-bottom:12px;overflow:hidden;}
+.ed-hdr{padding:12px 16px;border-bottom:1px solid var(--b1);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.ed-from{font-size:12px;font-weight:600;color:var(--t1);}
+.ed-subj{font-size:11px;color:var(--t2);margin-top:2px;}
+.ed-time{font-size:10px;color:var(--t3);white-space:nowrap;flex-shrink:0;}
+.ed-body{padding:12px 16px;font-size:12px;color:var(--t2);line-height:1.7;max-height:140px;overflow-y:auto;}
+.ed-classify{padding:10px 16px;border-top:1px solid var(--b1);background:var(--bg2);display:flex;align-items:center;gap:8px;}
+.ed-classify-lbl{font-size:11px;color:var(--t3);}
+.classify-spinner{width:14px;height:14px;border:2px solid var(--b2);border-top-color:var(--nvt);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── Scenario badge mapping ── */
+.scenario-result{display:flex;align-items:center;gap:8px;flex:1;}
+.scenario-pill{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;}
+
+/* ── Loading spinner for AI calls ── */
+.ai-loading{display:flex;align-items:center;gap:8px;padding:12px 14px;font-size:12px;color:var(--t3);}
+.spinner{width:14px;height:14px;border:2px solid var(--b2);border-top-color:var(--nvt);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:10px;}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sb-brand">
+      <div class="sb-brand-inner">
+        <div class="sb-brand-left">
+          <svg class="sb-ship" style="width:22px;height:22px;stroke:rgba(255,255,255,0.45);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24">
+            <path d="M2 21c.6.5 1.2 1 2.5 1C7 22 7 20 9.5 20s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.3.8 4.4 2.1 6"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/><path d="M12 10v4"/><path d="M12 2v3"/>
+          </svg>
+          <div class="sb-divider"></div>
+          <div class="sb-texts">
+            <div class="sb-name">RINA Agent</div>
+            <div class="sb-sub">singapore.marine@rina.org</div>
+          </div>
+        </div>
+        <div class="sb-thm" onclick="toggleTheme()" title="Toggle theme">
+          <svg id="thm-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="ng">
+      <div class="ngl">Mailbox</div>
+      <div class="ni on" onclick="nav('inbox',this)" data-icon="mail" data-title="Inbox" data-sub="Monitoring singapore.marine@rina.org">
+        <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        Inbox <span class="nb nba" id="badge-inbox">0</span>
+      </div>
+      <div class="ni" onclick="nav('notifs',this)" data-icon="bell" data-title="Notifications" data-sub="Alerts and reminders">
+        <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        Notifications <span class="nb nbw" id="badge-notifs">0</span>
+      </div>
+    </div>
+
+    <div class="ng">
+      <div class="ngl">Workflows</div>
+      <div class="ni" onclick="nav('workflows',this)" data-icon="list" data-title="Active workflows" data-sub="In-progress email workflows">
+        <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Active workflows <span class="nb nbw" id="badge-wf">0</span>
+      </div>
+      <div class="ni" onclick="nav('avail',this)" data-icon="calendar" data-title="Surveyor availability" data-sub="Check calendar and assign surveyors">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Surveyor availability
+      </div>
+    </div>
+
+    <div class="ng">
+      <div class="ngl">Settings</div>
+      <div class="ni" onclick="nav('surveyors',this)" data-icon="users" data-title="Surveyor list" data-sub="Manage the surveyor master list">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Surveyor list
+      </div>
+      <div class="ni" onclick="nav('settings',this)" data-icon="settings" data-title="Settings" data-sub="API keys and preferences">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </div>
+    </div>
+
+    <div class="sb-foot">
+      <div class="sf">
+        <div class="sfav">ML</div>
+        <div style="flex:1;min-width:0;">
+          <div class="sfn">Matthew Low</div>
+          <div class="sfr">Graduate Marine Surveyor</div>
+        </div>
+        <div id="leave-toggle" onclick="toggleLeave()" title="Pause/resume agent" style="width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background 0.15s;">
+          <svg id="leave-icon" viewBox="0 0 24 24" style="width:14px;height:14px;stroke:rgba(255,255,255,0.6);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+        </div>
+      </div>
+      <div class="live-pill" id="live-pill">
+        <div class="live-dot" id="live-indicator"></div>
+        <div class="live-txt" id="live-txt">Connecting...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="tb-l">
+        <div class="tb-ic">
+          <svg id="tb-icon" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        </div>
+        <div>
+          <div class="tb-title" id="tb-title">Inbox</div>
+          <div class="tb-sub" id="tb-sub">Monitoring singapore.marine@rina.org</div>
+        </div>
+      </div>
+      <div class="tb-r">
+        <div class="live-badge"><div class="live-badge-dot"></div> Live</div>
+        <button class="tb-btn" onclick="scanNow()">
+          <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Scan now
+        </button>
+      </div>
+    </div>
+
+    <!-- Leave banner -->
+    <div id="leave-banner" style="display:none;align-items:center;gap:10px;padding:10px 20px;background:#1A3050;border-bottom:1px solid rgba(255,255,255,0.1);">
+      <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:#6EB3E0;fill:none;stroke-width:1.8;flex-shrink:0;stroke-linecap:round;stroke-linejoin:round;"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+      <span style="font-size:12px;color:#6EB3E0;">Agent is paused. New emails are being saved to Dropbox by Power Automate but notifications are suppressed. Click the power button in the sidebar to resume.</span>
+    </div>
+
+    <div class="content">
+
+      <!-- INBOX -->
+      <div class="screen on" id="screen-inbox">
+        <div class="stats">
+          <div class="stat"><div class="stat-lbl">Unread</div><div class="stat-val hl" id="stat-unread">0</div></div>
+          <div class="stat"><div class="stat-lbl">Active workflows</div><div class="stat-val hl" id="stat-wf">0</div></div>
+          <div class="stat"><div class="stat-lbl">Actioned today</div><div class="stat-val" id="stat-actioned">0</div></div>
+          <div class="stat"><div class="stat-lbl">Pending flags</div><div class="stat-val hl" id="stat-flags">0</div></div>
+        </div>
+        <div class="chips">
+          <div class="chip on" onclick="filterEmails('all',this)">All</div>
+          <div class="chip" onclick="filterEmails('survey',this)">Survey request</div>
+          <div class="chip" onclick="filterEmails('plan',this)">Plan approval</div>
+          <div class="chip" onclick="filterEmails('uwild',this)">UWILD</div>
+          <div class="chip" onclick="filterEmails('class',this)">Class maintenance</div>
+          <div class="chip" onclick="filterEmails('extension',this)">Extension</div>
+          <div class="chip" onclick="filterEmails('flag',this)">Flagged</div>
+        </div>
+        <div class="elist" id="email-list">
+          <div style="padding:32px;text-align:center;color:var(--t3);font-size:12px;">
+            No emails loaded yet. Click "Scan now" or configure your mailbox in Settings.
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div class="screen" id="screen-notifs">
+        <div class="tdiv">Today</div>
+        <div class="notif-list" id="notif-list">
+          <div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">No notifications yet.</div>
+        </div>
+        <div class="tdiv">Upcoming reminders</div>
+        <div class="notif-list" id="reminder-list">
+          <div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">No reminders scheduled.</div>
+        </div>
+      </div>
+
+      <!-- WORKFLOWS -->
+      <div class="screen" id="screen-workflows">
+        <div class="slbl">Active workflows</div>
+        <div id="workflow-list">
+          <div style="padding:32px;text-align:center;color:var(--t3);font-size:12px;">No active workflows. Click an email in the inbox to start a workflow.</div>
+        </div>
+      </div>
+
+      <!-- AVAILABILITY -->
+      <div class="screen" id="screen-avail">
+        <div class="av-top">
+          <div>
+            <div class="av-date">Surveyor availability checker</div>
+            <div class="av-win">Enter a date to check the RINA Singapore Marine calendar</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:14px;align-items:flex-end;flex-wrap:wrap;">
+          <div>
+            <div class="slbl" style="margin-bottom:4px;">Date of attendance</div>
+            <input type="date" id="avail-date-input" style="padding:7px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;" />
+          </div>
+          <button class="btn btn-n" onclick="checkAvailability()">
+            <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Check calendar
+          </button>
+        </div>
+        <div id="avail-results">
+          <div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">Select a date above to check surveyor availability.</div>
+        </div>
+      </div>
+
+      <!-- SURVEYOR LIST -->
+      <div class="screen" id="screen-surveyors">
+        <div class="slbl">Surveyor master list</div>
+        <div style="margin-bottom:12px;font-size:12px;color:var(--t2);">These names are matched against calendar events to determine surveyor assignments.</div>
+        <div id="surveyor-list-container"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+          <input type="text" id="new-surveyor-input" placeholder="Add surveyor name..." style="padding:7px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;flex:1;" />
+          <button class="btn btn-n" onclick="addSurveyor()">Add</button>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="screen" id="screen-settings">
+        <div class="slbl" style="margin-bottom:12px;">Configuration</div>
+        <div class="wfc">
+          <div class="wfh">
+            <div class="wfhi">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </div>
+            <div><div class="wft">API & mailbox settings</div><div class="wfs">Required to connect to Microsoft 365 and Claude</div></div>
+          </div>
+          <div class="wfb" style="display:flex;flex-direction:column;gap:14px;">
+            <div>
+              <div class="slbl" style="margin-bottom:4px;">Dropbox refresh token (permanent — never expires)</div>
+              <input type="password" id="cfg-dropbox-token" placeholder="Paste your Dropbox refresh token here..." style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;" />
+              <div style="font-size:10px;color:var(--t3);margin-top:4px;">This is your permanent refresh token — it never expires. See the setup guide for how to generate it.</div>
+            </div>
+            <div>
+              <div class="slbl" style="margin-bottom:4px;">Anthropic API key</div>
+              <input type="password" id="cfg-sonnet-key" placeholder="sk-ant-..." style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;" />
+              <div style="font-size:10px;color:var(--t3);margin-top:4px;">From console.anthropic.com. Classification uses Haiku (low cost), drafts use Sonnet (quality). Same key for both.</div>
+            </div>
+            <input type="hidden" id="cfg-haiku-key" />
+            <div>
+              <div class="slbl" style="margin-bottom:4px;">Shared mailbox address</div>
+              <input type="text" id="cfg-mailbox" value="singapore.marine@rina.org" style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;" />
+            </div>
+            <div>
+              <div class="slbl" style="margin-bottom:4px;">Shared calendar name</div>
+              <input type="text" id="cfg-calendar" value="RINA Singapore Marine" style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;" />
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-n" onclick="saveSettings()">Save settings</button>
+              <button class="btn" onclick="testConnection()">Test Dropbox connection</button>
+            </div>
+            <div id="settings-status" style="font-size:11px;color:var(--t3);"></div>
+            <div style="padding:10px 12px;background:var(--nvl);border-radius:var(--radius-md);font-size:11px;color:var(--nvt);line-height:1.6;">
+              <strong>On/Off leave toggle:</strong> Click the power button next to your name in the sidebar to pause the agent. Power Automate keeps writing emails to Dropbox, but no notifications are triggered until you resume.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+
+    <!-- Confirm overlay -->
+    <div class="confirm-overlay" id="confirm-overlay">
+      <div class="confirm-box">
+        <div class="confirm-title" id="confirm-title">Dismiss this notification?</div>
+        <div class="confirm-sub" id="confirm-sub">This will be removed from your list.</div>
+        <div class="confirm-row">
+          <button class="cbtn" onclick="hideConfirm()">Cancel</button>
+          <button class="cbtn cbtn-del" id="confirm-ok" onclick="hideConfirm()">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+var state = {
+  dark: false,
+  paused: false,
+  emails: [],
+  notifications: [],
+  workflows: [],
+  actioned: 0,
+  surveyors: ['Roderick','Gilbert','Jiahui','Zani','Chris','Choy','Sufian','Jiang','Haibo','David','Rawat','Glenn','Lixiang','Nicholas','Faris','Ibrahim','Mahadir','Jerry'],
+  cfg: { sonnetKey:'', haikuKey:'', dropboxRefreshToken:'', mailbox:'singapore.marine@rina.org', calendar:'RINA Singapore Marine' },
+  currentFilter: 'all',
+  pollInterval: null
+};
+
+// Scenario config
+var SCENARIOS = {
+  survey:    { label:'Survey request',       cls:'t-sv', border:'#003087' },
+  plan:      { label:'Plan approval',        cls:'t-pl', border:'#534AB7' },
+  uwild:     { label:'UWILD',                cls:'t-uw', border:'#0F6E56' },
+  class:     { label:'Class maintenance',    cls:'t-cl', border:'#5F5E5A' },
+  extension: { label:'Extension survey',     cls:'t-ex', border:'#854F0B' },
+  flag:      { label:'Requires attention',   cls:'t-fl', border:'#888780' }
+};
+
+// ── Init ────────────────────────────────────────────────────────────────────
+window.onload = function(){
+  loadSettings();
+  renderSurveyors();
+  updateLeaveUI();
+  requestNotificationPermission();
+  if(state.cfg.dropboxRefreshToken && !state.paused){
+    setLiveStatus(true, 'Monitoring mailbox — live');
+    startAutoPoll();
+  } else if(state.paused){
+    setLiveStatus(false, 'Agent paused — on leave');
+  } else {
+    setLiveStatus(false, 'Configure Dropbox token in Settings');
+  }
+  var today = new Date().toISOString().split('T')[0];
+  document.getElementById('avail-date-input').value = today;
+};
+
+// ── Theme ───────────────────────────────────────────────────────────────────
+function toggleTheme(){
+  state.dark = !state.dark;
+  document.body.className = state.dark ? 'dark' : '';
+  var icon = document.getElementById('thm-icon');
+  if(state.dark){
+    icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+  } else {
+    icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  }
+}
+
+// ── Navigation ───────────────────────────────────────────────────────────────
+function nav(screenId, el){
+  document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('on'); });
+  document.querySelectorAll('.ni').forEach(function(n){ n.classList.remove('on'); });
+  document.getElementById('screen-'+screenId).classList.add('on');
+  if(el) el.classList.add('on');
+  document.getElementById('tb-title').textContent = el ? el.dataset.title : screenId;
+  document.getElementById('tb-sub').textContent = el ? el.dataset.sub : '';
+  if(screenId === 'surveyors') renderSurveyors();
+}
+
+// ── Live status ──────────────────────────────────────────────────────────────
+function setLiveStatus(connected, msg){
+  var dot = document.getElementById('live-indicator');
+  var txt = document.getElementById('live-txt');
+  dot.style.background = connected ? 'var(--live)' : '#888780';
+  txt.textContent = msg || (connected ? 'Monitoring mailbox — live' : 'Not connected');
+  var badge = document.querySelector('.live-badge');
+  badge.querySelector('.live-badge-dot').style.background = connected ? 'var(--live)' : '#888780';
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+function saveSettings(){
+  state.cfg.sonnetKey          = document.getElementById('cfg-sonnet-key').value.trim();
+  state.cfg.haikuKey           = document.getElementById('cfg-haiku-key').value.trim();
+  state.cfg.dropboxRefreshToken= document.getElementById('cfg-dropbox-token').value.trim();
+  state.cfg.mailbox            = document.getElementById('cfg-mailbox').value.trim();
+  state.cfg.calendar           = document.getElementById('cfg-calendar').value.trim();
+  localStorage.setItem('rina_cfg', JSON.stringify(state.cfg));
+  localStorage.setItem('rina_paused', state.paused ? '1' : '0');
+  document.getElementById('settings-status').textContent = 'Settings saved.';
+  setTimeout(function(){ document.getElementById('settings-status').textContent = ''; }, 2000);
+  requestNotificationPermission();
+  longpollActive = false;
+  startAutoPoll();
+}
+
+function loadSettings(){
+  var saved = localStorage.getItem('rina_cfg');
+  if(saved){ try{ state.cfg = JSON.parse(saved); } catch(e){} }
+  state.paused = localStorage.getItem('rina_paused') === '1';
+  document.getElementById('cfg-sonnet-key').value    = state.cfg.sonnetKey           || '';
+  document.getElementById('cfg-haiku-key').value     = state.cfg.haikuKey            || '';
+  document.getElementById('cfg-dropbox-token').value = state.cfg.dropboxRefreshToken || '';
+  document.getElementById('cfg-mailbox').value       = state.cfg.mailbox             || 'singapore.marine@rina.org';
+  document.getElementById('cfg-calendar').value      = state.cfg.calendar            || 'RINA Singapore Marine';
+}
+
+// ── Leave toggle ──────────────────────────────────────────────────────────────
+function toggleLeave(){
+  state.paused = !state.paused;
+  localStorage.setItem('rina_paused', state.paused ? '1' : '0');
+  updateLeaveUI();
+  if(!state.paused){
+    longpollActive = false;
+    startAutoPoll();
+    scanNow();
+  }
+}
+
+function updateLeaveUI(){
+  var dot  = document.getElementById('live-indicator');
+  var txt  = document.getElementById('live-txt');
+  var pill = document.getElementById('live-pill');
+  var tog  = document.getElementById('leave-toggle');
+  var banner = document.getElementById('leave-banner');
+  if(state.paused){
+    dot.style.background = '#888780';
+    dot.style.animation  = 'none';
+    txt.textContent      = 'Agent paused — on leave';
+    tog.style.background = 'rgba(227,6,19,0.25)';
+    tog.style.borderColor= 'rgba(227,6,19,0.5)';
+    if(banner) banner.style.display = 'flex';
+  } else {
+    dot.style.background = '';
+    dot.style.animation  = '';
+    tog.style.background = 'rgba(255,255,255,0.07)';
+    tog.style.borderColor= 'rgba(255,255,255,0.15)';
+    if(banner) banner.style.display = 'none';
+    if(state.cfg.dropboxRefreshToken){
+      txt.textContent = 'Monitoring mailbox — live';
+    } else {
+      txt.textContent = 'Configure Dropbox in Settings';
+    }
+  }
+}
+
+// ── Auto poll every 5 minutes ────────────────────────────────────────────────
+function startAutoPoll(){
+  if(state.pollInterval) clearInterval(state.pollInterval);
+  if(!state.cfg.dropboxRefreshToken) return;
+  // Start longpoll for near-instant email detection
+  startLongpoll();
+  // Also poll calendar every 5 minutes as fallback
+  state.pollInterval = setInterval(function(){
+    if(!state.paused) scanNow();
+  }, 5 * 60 * 1000);
+}
+
+// ── Dropbox longpoll — near-instant detection ─────────────────────────────────
+// Gets cursor for emails.json then holds a longpoll connection (up to 30s).
+// When file changes, fires immediately. Reconnects automatically.
+var longpollActive = false;
+function startLongpoll(){
+  if(longpollActive || !state.cfg.dropboxRefreshToken || state.paused) return;
+  longpollActive = true;
+  getCursor().then(function(cursor){
+    poll(cursor);
+  }).catch(function(){
+    longpollActive = false;
+    setTimeout(startLongpoll, 30000);
+  });
+}
+
+function getCursor(){
+  return getDropboxAccessToken().then(function(token){
+    return fetch('https://api.dropboxapi.com/2/files/list_folder', {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+      body: JSON.stringify({ path:'/RINA-Agent', recursive:false })
+    });
+  }).then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data.cursor) throw new Error('No cursor');
+      return data.cursor;
+    });
+}
+
+function poll(cursor){
+  if(state.paused){ longpollActive=false; return; }
+  fetch('https://notify.dropboxapi.com/2/files/list_folder/longpoll', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ cursor: cursor, timeout: 30 })
+  }).then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.changes){
+        scanNow();
+      }
+      return getDropboxAccessToken().then(function(token){
+        return fetch('https://api.dropboxapi.com/2/files/list_folder/continue', {
+          method:'POST',
+          headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+          body: JSON.stringify({ cursor: cursor })
+        }).then(function(r){ return r.json(); })
+          .then(function(d){ return d.cursor || cursor; });
+      });
+    })
+    .then(function(newCursor){
+      setTimeout(function(){ poll(newCursor); }, 500);
+    })
+    .catch(function(){
+      longpollActive = false;
+      setTimeout(startLongpoll, 10000);
+    });
+}
+
+// ── Browser push notifications ────────────────────────────────────────────────
+function requestNotificationPermission(){
+  if(!('Notification' in window)) return;
+  if(Notification.permission === 'default'){
+    Notification.requestPermission();
+  }
+}
+
+function sendBrowserNotification(title, body, scenario){
+  if(!('Notification' in window)) return;
+  if(Notification.permission !== 'granted') return;
+  var icons = { survey:'⚓', plan:'📄', uwild:'🌊', class:'🏢', extension:'📅', flag:'🚩' };
+  var icon = icons[scenario] || '📧';
+  try {
+    var n = new Notification('RINA Agent — ' + title, {
+      body: body,
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%23003087"/><text x="50%" y="68%" text-anchor="middle" font-size="18" fill="white" font-family="Georgia">RI</text></svg>',
+      tag: 'rina-' + Date.now(),
+      requireInteraction: scenario === 'class'
+    });
+    n.onclick = function(){ window.focus(); n.close(); };
+  } catch(e){}
+}
+
+function testConnection(){
+  var status = document.getElementById('settings-status');
+  if(!state.cfg.dropboxRefreshToken){ status.textContent = 'No Dropbox refresh token configured.'; return; }
+  status.textContent = 'Testing Dropbox connection...';
+  getDropboxAccessToken().then(function(){
+    return dropboxRead('emails.json');
+  }).then(function(){
+    status.textContent = 'Connected to Dropbox successfully.';
+    setLiveStatus(true, 'Monitoring mailbox — live');
+  }).catch(function(e){
+    status.textContent = 'Connection failed: ' + e.message;
+    setLiveStatus(false, 'Check Dropbox token in Settings');
+  });
+}
+
+// ── Dropbox OAuth — refresh token flow ───────────────────────────────────────
+// The refresh token never expires. We exchange it for a short-lived access
+// token whenever we need to make an API call. Access tokens are cached for
+// up to 3.5 hours before refreshing again.
+var dropboxAccessToken = null;
+var dropboxTokenExpiry = 0;
+var DROPBOX_APP_KEY    = 'gzsafxn679dq0sh';
+var DROPBOX_APP_SECRET = 'tcmgc3q5j8abgd6';
+
+function getDropboxAccessToken(){
+  var now = Date.now();
+  // Return cached token if still valid (with 5-min buffer)
+  if(dropboxAccessToken && now < dropboxTokenExpiry - 300000){
+    return Promise.resolve(dropboxAccessToken);
+  }
+  var refreshToken = state.cfg.dropboxRefreshToken;
+  if(!refreshToken) return Promise.reject(new Error('No refresh token configured'));
+
+  var body = 'grant_type=refresh_token' +
+             '&refresh_token=' + encodeURIComponent(refreshToken) +
+             '&client_id=' + encodeURIComponent(DROPBOX_APP_KEY) +
+             '&client_secret=' + encodeURIComponent(DROPBOX_APP_SECRET);
+
+  return fetch('https://api.dropbox.com/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body
+  }).then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!data.access_token) throw new Error('Token refresh failed: ' + (data.error_description || data.error || 'unknown'));
+      dropboxAccessToken = data.access_token;
+      dropboxTokenExpiry = Date.now() + (data.expires_in || 14400) * 1000;
+      return dropboxAccessToken;
+    });
+}
+
+// ── Dropbox API ───────────────────────────────────────────────────────────────
+function dropboxRead(filename){
+  return getDropboxAccessToken().then(function(token){
+    return fetch('https://content.dropboxapi.com/2/files/download', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Dropbox-API-Arg': JSON.stringify({ path: '/RINA-Agent/' + filename })
+      }
+    });
+  }).then(function(r){
+    if(!r.ok) throw new Error('Dropbox error ' + r.status + ' reading ' + filename);
+    return r.text();
+  }).then(function(text){
+    try{ return JSON.parse(text); } catch(e){ return []; }
+  });
+}
+
+function fetchCalendarEvents(startDate, endDate){
+  return dropboxRead('calendar.json').then(function(events){
+    // Filter to the requested window
+    var start = new Date(startDate).getTime();
+    var end   = new Date(endDate).getTime();
+    var filtered = (events||[]).filter(function(ev){
+      var evStart = new Date(ev.start).getTime();
+      return evStart >= start && evStart <= end;
+    });
+    return { value: filtered };
+  });
+}
+
+// ── Scan ─────────────────────────────────────────────────────────────────────
+function scanNow(){
+  if(state.paused){
+    showToast('Agent is paused. Toggle the power button to resume.');
+    return;
+  }
+  if(!state.cfg.dropboxRefreshToken){
+    alert('Please configure your Dropbox token in Settings first.');
+    return;
+  }
+  setLiveStatus(true, 'Reading from Dropbox...');
+  dropboxRead('emails.json').then(function(msgs){
+    setLiveStatus(true, 'Monitoring mailbox — live');
+    msgs = msgs || [];
+    var newEmails = msgs.filter(function(m){
+      return !state.emails.find(function(e){ return e.id === m.id; });
+    });
+    if(newEmails.length === 0){
+      renderEmails();
+      return;
+    }
+    classifyEmails(newEmails).then(function(classified){
+      classified.forEach(function(e){ state.emails.unshift(e); });
+      renderEmails();
+      updateStats();
+      createNotifications(classified.filter(function(e){ return e.scenario !== 'none'; }));
+      renderNotifications();
+    });
+  }).catch(function(err){
+    setLiveStatus(false, 'Error: ' + err.message);
+  });
+}
+
+// ── Claude Haiku — classify ──────────────────────────────────────────────────
+function classifyEmails(emails){
+  var key = state.cfg.haikuKey || state.cfg.sonnetKey;
+  if(!key){
+    // No key: return unclassified
+    return Promise.resolve(emails.map(function(m){
+      return Object.assign({}, m, { scenario: 'flag', scenarioLabel: 'Requires attention' });
+    }));
+  }
+  var promises = emails.map(function(msg){
+    var prompt = 'Classify this email into one of these scenarios:\n' +
+      '- survey: request for surveyor attendance, vessel ETA, boarding arrangements\n' +
+      '- plan: review and approval of drawings, CII, SEEMP, DMLC, SSP, DCS\n' +
+      '- uwild: underwater in lieu of dry-docking, in-water survey, IWS notation\n' +
+      '- class: Class Maintenance Statement or Certificate request\n' +
+      '- extension: extension of renewal survey, bottom survey, dry docking, due date\n' +
+      '- flag: requires Singapore office attention but does not fit above\n' +
+      '- none: routine, no action required\n\n' +
+      'Also extract: vessel_name (if mentioned), date (if mentioned, ISO format), client_name.\n' +
+      'Respond ONLY with valid JSON: {"scenario":"...","vessel_name":"...","date":"...","client_name":"..."}\n\n' +
+      'Subject: ' + msg.subject + '\n' +
+      'Preview: ' + msg.bodyPreview;
+
+    return fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        messages:[{ role:'user', content: prompt }]
+      })
+    }).then(function(r){ return r.json(); })
+      .then(function(data){
+        var text = (data.content && data.content[0] && data.content[0].text) || '{}';
+        try{
+          var clean = text.replace(/```json|```/g,'').trim();
+          var parsed = JSON.parse(clean);
+          return Object.assign({}, msg, {
+            scenario:      parsed.scenario || 'flag',
+            vessel_name:   parsed.vessel_name || '',
+            survey_date:   parsed.date || '',
+            client_name:   parsed.client_name || msg.from.emailAddress.name || ''
+          });
+        } catch(e){
+          return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'' });
+        }
+      }).catch(function(){
+        return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'' });
+      });
+  });
+  return Promise.all(promises);
+}
+
+// ── Render emails ────────────────────────────────────────────────────────────
+function renderEmails(){
+  var list = document.getElementById('email-list');
+  var filtered = state.emails.filter(function(e){
+    if(state.currentFilter === 'all') return e.scenario !== 'none';
+    return e.scenario === state.currentFilter;
+  });
+  if(!filtered.length){
+    list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--t3);font-size:12px;">No emails in this category.</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(function(e){
+    var sc = SCENARIOS[e.scenario] || SCENARIOS.flag;
+    var unread = !e.isRead ? ' unread' : '';
+    var isFlagged = e.scenario === 'flag' ? ' flagged' : '';
+    var borderStyle = (!e.isRead) ? 'border-left:3px solid ' + sc.border + ';' : '';
+    var dot = (!e.isRead) ? '<div class="udot"></div>' : '';
+    var tags = '<span class="tag ' + sc.cls + '">' + sc.label + '</span>';
+    if(e.scenario === 'class') tags += ' <span class="tag t-hp">High priority</span>';
+    var from = e.from && e.from.emailAddress ? (e.from.emailAddress.name || e.from.emailAddress.address) : 'Unknown';
+    var time = e.receivedDateTime ? formatTime(e.receivedDateTime) : '';
+    return '<div class="ec' + isFlagged + '" style="' + borderStyle + '" onclick="openEmail(\'' + e.id + '\')">' +
+      '<div class="ei">' +
+      '<div class="eic" style="background:' + sc.border + '18;">' +
+      getScenarioIcon(e.scenario, sc.border) +
+      '</div>' +
+      '<div class="em">' +
+      '<div class="efr">' + escHtml(from) + '</div>' +
+      '<div class="esub">' + escHtml(e.subject || '(no subject)') + '</div>' +
+      '<div class="etags">' + tags + '</div>' +
+      '</div>' +
+      '<div class="er"><div class="etm">' + time + '</div>' + dot + '</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+function filterEmails(type, el){
+  state.currentFilter = type;
+  document.querySelectorAll('.chips .chip').forEach(function(c){ c.classList.remove('on'); });
+  el.classList.add('on');
+  renderEmails();
+}
+
+// ── Open email → workflow ────────────────────────────────────────────────────
+function openEmail(id){
+  var email = state.emails.find(function(e){ return e.id === id; });
+  if(!email) return;
+  // Mark as read locally
+  email.isRead = true;
+  updateStats();
+  renderEmails();
+  // Create or show workflow
+  var existing = state.workflows.find(function(w){ return w.emailId === id; });
+  if(!existing){
+    var wf = {
+      emailId: id,
+      email: email,
+      scenario: email.scenario,
+      step: 1,
+      drafts: {},
+      surveyDate: email.survey_date || '',
+      vesselName: email.vessel_name || '',
+      clientName: email.client_name || (email.from && email.from.emailAddress ? email.from.emailAddress.name : '')
+    };
+    state.workflows.push(wf);
+    updateStats();
+  }
+  // Navigate to workflow view
+  var wfNav = document.querySelector('.ni[data-icon="list"]');
+  nav('workflows', wfNav);
+  renderWorkflows();
+}
+
+// ── Render workflows ─────────────────────────────────────────────────────────
+function renderWorkflows(){
+  var container = document.getElementById('workflow-list');
+  if(!state.workflows.length){
+    container.innerHTML = '<div style="padding:32px;text-align:center;color:var(--t3);font-size:12px;">No active workflows.</div>';
+    return;
+  }
+  container.innerHTML = state.workflows.map(function(wf, idx){
+    return renderWorkflow(wf, idx);
+  }).join('');
+}
+
+function renderWorkflow(wf, idx){
+  var sc = SCENARIOS[wf.scenario] || SCENARIOS.flag;
+  var steps = getWorkflowSteps(wf);
+  var stepsHtml = steps.map(function(s, i){
+    var cls = i + 1 < wf.step ? 'done' : (i + 1 === wf.step ? 'active' : 'pending');
+    var numContent = cls === 'done'
+      ? '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>'
+      : (i+1).toString();
+    var numCls = cls === 'done' ? 'sn-done' : (cls === 'active' ? 'sn-active' : 'sn-pending');
+    return '<div class="step ' + cls + '">' +
+      '<div class="snum ' + numCls + '">' + numContent + '</div>' +
+      '<div><div class="stit">' + s.title + '</div><div class="sdsc">' + s.desc + '</div></div>' +
+      '</div>';
+  }).join('');
+
+  var draftHtml = '';
+  var actionHtml = '';
+  if(wf.step <= steps.length){
+    var currentStep = steps[wf.step - 1];
+    if(currentStep && currentStep.draftKey){
+      var draft = wf.drafts[currentStep.draftKey];
+      if(draft === undefined){
+        draftHtml = '<div class="ai-loading"><div class="spinner"></div> Generating draft...</div>';
+        setTimeout(function(){ generateDraft(wf, idx, currentStep); }, 100);
+      } else if(draft === 'loading'){
+        draftHtml = '<div class="ai-loading"><div class="spinner"></div> Generating draft with Claude...</div>';
+      } else {
+        draftHtml = '<div class="slbl" style="margin-top:2px">Draft — step ' + wf.step + '</div>' +
+          '<div class="draft-wrap">' +
+          '<div class="draft-hdr"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>' +
+          '<span class="draft-hdr-lbl">' + (currentStep.draftLabel || 'Draft email') + '</span>' +
+          '<span class="draft-to">Copy to Outlook to send</span></div>' +
+          '<div class="draft-body">' + escHtml(draft) + '</div>' +
+          '<div class="draft-hint"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+          'Review this draft. Copy to Outlook to send, or use the refine button to polish it.</div>' +
+          '</div>';
+        actionHtml = '<div class="arow">' +
+          '<button class="btn btn-ol" onclick="refineDraft(' + idx + ',' + (wf.step-1) + ')">✦ Refine with Claude ↗</button>' +
+          '<button class="btn" onclick="copyDraft(' + idx + ')">Copy draft</button>' +
+          (wf.scenario === 'survey' || wf.scenario === 'uwild' || wf.scenario === 'extension' ? '<button class="btn btn-n" onclick="goToAvailability(\'' + (wf.surveyDate||'') + '\')">Check availability</button>' : '') +
+          (wf.step < steps.length ? '<button class="btn btn-n" onclick="advanceStep(' + idx + ')">Next step →</button>' : '<button class="btn btn-n" onclick="closeWorkflow(' + idx + ')">Complete workflow</button>') +
+          '</div>';
+      }
+    } else if(currentStep && !currentStep.draftKey){
+      // Manual step
+      actionHtml = '<div style="padding:12px;background:var(--nvl);border-radius:var(--radius-md);font-size:12px;color:var(--nvt);margin-bottom:10px;">' + (currentStep.manualNote||'Complete this step manually, then advance.') + '</div>' +
+        '<div class="arow">' +
+        (wf.scenario === 'survey' || wf.scenario === 'uwild' ? '<button class="btn btn-n" onclick="goToAvailability(\'' + (wf.surveyDate||'') + '\')">Check availability</button>' : '') +
+        '<button class="btn btn-n" onclick="advanceStep(' + idx + ')">Mark done → Next step</button>' +
+        '</div>';
+    }
+  } else {
+    actionHtml = '<div style="padding:10px;font-size:12px;color:var(--t3);">Workflow complete.</div>';
+  }
+
+  var from = wf.email && wf.email.from ? (wf.email.from.emailAddress.name || wf.email.from.emailAddress.address) : 'Unknown';
+  var title = (wf.vesselName || wf.email.subject || 'Email').substring(0,40);
+
+  return '<div class="wfc">' +
+    '<div class="wfh">' +
+    '<div class="wfhi">' + getScenarioIcon(wf.scenario, '#fff') + '</div>' +
+    '<div><div class="wft">' + escHtml(title) + ' — ' + sc.label.toLowerCase() + '</div>' +
+    '<div class="wfs">' + escHtml(from) + (wf.surveyDate ? ' · ' + formatDate(wf.surveyDate) : '') + '</div></div>' +
+    '<div class="wfbdg">Step ' + Math.min(wf.step, steps.length) + ' of ' + steps.length + '</div>' +
+    '</div>' +
+    '<div class="wfb">' +
+    '<div class="steps">' + stepsHtml + '</div>' +
+    draftHtml + actionHtml +
+    '</div></div>';
+}
+
+function getWorkflowSteps(wf){
+  var s = wf.scenario;
+  if(s === 'survey') return [
+    { title:'Send acknowledgement to client', desc:'Draft ready — copy to Outlook', draftKey:'ack', draftLabel:'Acknowledgement email to client' },
+    { title:'Forward to Sherry — open job', desc:'Request job number from commercial team', draftKey:'sherry', draftLabel:'Email to Sherry · Commercial team' },
+    { title:'Check surveyor availability', desc:'Target date: ' + (wf.surveyDate || 'TBC'), manualNote:'Use the availability checker to select a surveyor, then advance.' },
+    { title:'Draft assignment email to client', desc:'Awaiting surveyor selection', draftKey:'assign', draftLabel:'Assignment email to client' }
+  ];
+  if(s === 'plan') return [
+    { title:'Forward to Plan Approval Centre', desc:'Attach submitted documents', draftKey:'pac', draftLabel:'Email to Plan Approval Centre' },
+    { title:'Email Sherry — quotation request', desc:'Request quotation and job opening', draftKey:'sherry', draftLabel:'Email to Sherry · Commercial team' },
+    { title:'Reply to client', desc:'Draft reply once you have reviewed the documents', draftKey:'client', draftLabel:'Reply to client' }
+  ];
+  if(s === 'uwild') return [
+    { title:'Send acknowledgement to client', desc:'UWILD acknowledgement with conditions', draftKey:'ack', draftLabel:'Acknowledgement email to client' },
+    { title:'Email MTS for approval', desc:'Attach ship status document', draftKey:'mts', draftLabel:'Email to MTS · Marine Tech Support' },
+    { title:'Await MTS approval', desc:'Check availability once date confirmed', manualNote:'Once MTS approves, obtain date of attendance from client then check availability.' },
+    { title:'Assign surveyor', desc:'Draft assignment email to client', draftKey:'assign', draftLabel:'Assignment email to client' }
+  ];
+  if(s === 'class') return [
+    { title:'Review email and action', desc:'High priority — check vessel details in database', manualNote:'This is a high-priority Class Maintenance Statement request. Check the vessel in the RINA database and action accordingly.' }
+  ];
+  if(s === 'extension') return [
+    { title:'Send acknowledgement to client', desc:'SGD700 fee, Flag approval required', draftKey:'ack', draftLabel:'Acknowledgement email to client' },
+    { title:'Draft email to MPA Flag', desc:'Prepare Flag application with placeholders', draftKey:'flag', draftLabel:'Email to MPA · Flag Authority' },
+    { title:'Await Flag approval', desc:'Once approved, inform client and assign surveyor', manualNote:'Await Flag approval. Once received, proceed to inform client and assign surveyor.' },
+    { title:'Inform client and assign surveyor', desc:'Draft client notification and check availability', draftKey:'assign', draftLabel:'Client notification email' }
+  ];
+  return [
+    { title:'Review and action', desc:'This email requires your attention', manualNote:'This email could not be matched to a specific workflow. Please review and action manually.' }
+  ];
+}
+
+// ── Draft generation ──────────────────────────────────────────────────────────
+function generateDraft(wf, idx, step){
+  var key = state.cfg.sonnetKey;
+  if(!key){
+    wf.drafts[step.draftKey] = getDraftTemplate(wf, step.draftKey);
+    renderWorkflows();
+    return;
+  }
+  wf.drafts[step.draftKey] = 'loading';
+  renderWorkflows();
+
+  var prompt = buildDraftPrompt(wf, step.draftKey);
+  fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({
+      model:'claude-sonnet-4-6',
+      max_tokens:800,
+      messages:[{ role:'user', content: prompt }]
+    })
+  }).then(function(r){ return r.json(); })
+    .then(function(data){
+      var text = (data.content && data.content[0] && data.content[0].text) || getDraftTemplate(wf, step.draftKey);
+      wf.drafts[step.draftKey] = text.trim();
+      renderWorkflows();
+    }).catch(function(){
+      wf.drafts[step.draftKey] = getDraftTemplate(wf, step.draftKey);
+      renderWorkflows();
+    });
+}
+
+function buildDraftPrompt(wf, draftKey){
+  var vessel = wf.vesselName || '[Vessel Name]';
+  var date   = wf.surveyDate ? formatDate(wf.surveyDate) : '[Date]';
+  var client = wf.clientName || '[Client Name]';
+  var subject = wf.email ? (wf.email.subject || '') : '';
+  var preview = wf.email ? (wf.email.bodyPreview || '') : '';
+
+  var prompts = {
+    // Survey
+    ack_survey: 'Write a professional acknowledgement email to a client ('+client+') who has requested surveyor attendance for '+vessel+' on '+date+'. The email should: acknowledge the request, ask them to review and acknowledge the attached document, mention we will revert with the assigned surveyor shortly. Be professional, concise, and naturally worded with proper paragraph spacing. Do not include a sign-off line — the sender has an automatic Outlook signature. Output only the email body text.',
+    sherry_survey: 'Write a short professional email to Sherry in the commercial team asking her to open a job for survey attendance of '+vessel+' on '+date+' and share the job number. Keep it brief and professional. Do not include a sign-off. Output only the email body text.',
+    assign_survey: 'Write a professional assignment email to a client informing them of their assigned surveyor for '+vessel+' on '+date+'. Leave a placeholder [SURVEYOR DETAILS] where the surveyor name and contact details should be inserted. Be concise and professional. Do not include a sign-off. Output only the email body text.',
+    // Plan approval
+    pac_plan: 'Write a professional email to the Plan Approval Centre colleagues forwarding documents submitted by a client ('+client+') for review and approval. Ask them to assist with the review and to advise on budgetary hours for the job. Mention a colleague will share the job number shortly. Professional and concise. No sign-off. Output only the email body text.',
+    sherry_plan: 'Write a short professional email to Sherry asking her to provide a client quotation and to open a job, then share the job number with the Plan Approval Centre. Brief and professional. No sign-off. Output only the email body text.',
+    client_plan: 'Write a professional acknowledgement reply to a client ('+client+') who has submitted documents for review and approval. Acknowledge receipt and let them know we are reviewing. If there is a specific context from this email subject and preview, factor it in: Subject: '+subject+' | Preview: '+preview+'. Be professional and natural. No sign-off. Output only the email body text.',
+    // UWILD
+    ack_uwild: 'Write a professional acknowledgement email to a client who has requested UWILD (underwater in lieu of dry-docking) for '+vessel+'. The email should: note their request, explain that without IWS notation we need to seek RINA MTS approval, list the standard in-water survey requirements (bottom survey before due date, rudder bearing clearances, stern bush clearances, sea chests/gratings/sea connections, sheltered water conditions, RINA-approved diving company), and state we will inform them once approval is received. Professional and formal. No sign-off. Output only the email body text.',
+    mts_uwild: 'Write a professional email to RINA MTS colleagues informing them of a UWILD request received from a ship manager for '+vessel+'. Since the vessel has no IWS notation, request their approval and any instructions. Include a table/list placeholder for vessel details: Vessel Name, RI Number, Status, Last Bottom Dry at Renewal Survey — with [TO BE FILLED] for each value. Mention attached ship status for reference. Professional tone. No sign-off. Output only the email body text.',
+    assign_uwild: 'Write a professional assignment email to a client informing them of their assigned surveyor for the UWILD/in-water survey of '+vessel+' on '+date+'. Leave a placeholder [SURVEYOR DETAILS]. Concise and professional. No sign-off. Output only the email body text.',
+    // Extension
+    ack_extension: 'Write a professional acknowledgement email to a client who has requested an extension of the renewal survey and bottom survey for '+vessel+'. The email should: acknowledge the request, inform them that Flag (MPA) approval is required and there is a fee of SGD700, request their confirmation and PO if required, and list the 3 standard conditions that must be met before the due date: (1) Completion of 5th H&M Annual Survey, (2) Commencement of H&M Renewal Survey with progression as far as possible, (3) Completion of Statutory Renewal Surveys apart from dry-dock specific items. Include a placeholder [DUE DATE] for the date. Professional and formal. No sign-off. Output only the email body text.',
+    flag_extension: 'Write a formal letter to MPA Singapore (Flag authority) requesting a 3-month extension for the renewal survey and bottom survey of '+vessel+'. Use these placeholders: [DUE DATE] for original due date, [EXTENSION DATE] for new proposed date, [SHIPYARD NAME] for the shipyard, [LAST BOTTOM SURVEY DATE] for the last bottom survey date. The letter should follow formal correspondence style, state the owner is unable to secure dry dock space, confirm RINA has no objection subject to the standard conditions being met, note the in-water survey may not be required subject to the 36-month rule (flag if [LAST BOTTOM SURVEY DATE] may exceed 36 months), and request concurrence to extend statutory certificates. Formal tone. No sign-off. Output only the letter body text.',
+    assign_extension: 'Write a short professional email to a client informing them that Flag has approved the extension survey request for '+vessel+' and that a surveyor has been assigned. Leave a placeholder [SURVEYOR DETAILS]. Mention the confirmed survey date as [SURVEY DATE]. Professional. No sign-off. Output only the email body text.'
+  };
+
+  var promptKey = draftKey + '_' + wf.scenario;
+  return prompts[promptKey] || 'Write a professional email draft for this maritime scenario. Vessel: '+vessel+', Date: '+date+', Client: '+client+'. Be concise and professional. No sign-off. Output only the email body text.';
+}
+
+function getDraftTemplate(wf, draftKey){
+  // Fallback templates when no API key
+  var vessel = wf.vesselName || '[Vessel Name]';
+  var date   = wf.surveyDate ? formatDate(wf.surveyDate) : '[Date]';
+  var templates = {
+    ack: 'Dear Sir,\n\nWe acknowledge your request for surveyor attendance on ' + date + '. Please review and acknowledge the attached document and revert with any information or documents, if any.\n\nWe will revert with the assigned surveyor\'s details shortly.',
+    sherry: 'Dear Sherry,\n\nPlease assist to open a job for the survey attendance of ' + vessel + ' on ' + date + ' and share the job number with me at your earliest convenience.\n\n[Add job description here if required]',
+    assign: 'Dear Sir,\n\nPlease contact the assigned surveyor below for boarding arrangements on ' + date + '.\n\nAttending Surveyor\'s Details:\n[SURVEYOR DETAILS]',
+    pac: 'Dear Colleagues,\n\nPlease refer to the attached documents submitted by the client. They have requested for the documents to be reviewed and approved. Please assist with the request.\n\nAdditionally, kindly advise on the budgetary hours for the job. My colleague will provide you the job number shortly.',
+    mts: 'Dear Colleagues,\n\nWe received a request from the ship manager of subject vessel requesting for UWILD. As the vessel is without IWS notation, please let us have your approval and instructions if any.\n\nAs per present ship status:\n\nVessel Name: [TO BE FILLED]\nRI Number: [TO BE FILLED]\nStatus: [TO BE FILLED]\nLast Bottom Dry at Renewal Survey: [TO BE FILLED]\n\nAttached ship status for your kind reference.',
+    flag: 'Dear Sir/Mdm,\n\nPlease be informed that the vessel subject is due for her Renewal Survey and Bottom Survey on [DUE DATE].\n\nThe ship manager is requesting a 3-month extension for the Renewal Survey and Bottom Survey till [EXTENSION DATE]. Please find attached the relevant documents for your reference.\n\nOur Organisation has no objection to postpone the vessel\'s drydocking survey and renewal surveys, provided that an extension survey consisting of the following are carried out prior to the due date:\n\n1. Completion of 5th Hull & Machinery Annual Survey\n2. Commencement of the Class Hull & Machinery Renewal Survey, with progression of the surveys as far as possible\n3. Completion of Statutory Renewal Surveys (including LSA/GMDSS/FFE, etc), apart from the items strictly related with DD\n\nWe seek your Esteemed Administration\'s concurrence for the postponement and extension of statutory certificates until [EXTENSION DATE].',
+    client: 'Dear Sir,\n\nThank you for your email. We acknowledge receipt of your submission and will revert with our response in due course.\n\nShould you have any questions in the meantime, please do not hesitate to contact us.'
+  };
+  return templates[draftKey] || 'Dear Sir,\n\nPlease find our response below.\n\n[Draft content — please complete]';
+}
+
+function refineDraft(wfIdx, stepIdx){
+  var wf = state.workflows[wfIdx];
+  var steps = getWorkflowSteps(wf);
+  var step = steps[stepIdx];
+  if(!step || !step.draftKey) return;
+  var draft = wf.drafts[step.draftKey];
+  var prompt = 'Please refine the following email draft for professional maritime correspondence. Make it grammatically correct, naturally worded, and well-spaced with proper paragraph breaks ready to paste into Outlook. Do not add a sign-off — the sender has an automatic Outlook signature:\n\n' + draft;
+  var key = state.cfg.sonnetKey;
+  if(!key){ alert('Add a Sonnet API key in Settings to use this feature.'); return; }
+  wf.drafts[step.draftKey] = 'loading';
+  renderWorkflows();
+  fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({
+      model:'claude-sonnet-4-6',
+      max_tokens:800,
+      messages:[{ role:'user', content: prompt }]
+    })
+  }).then(function(r){ return r.json(); })
+    .then(function(data){
+      var text = (data.content && data.content[0] && data.content[0].text) || draft;
+      wf.drafts[step.draftKey] = text.trim();
+      renderWorkflows();
+    }).catch(function(){
+      wf.drafts[step.draftKey] = draft;
+      renderWorkflows();
+    });
+}
+
+function copyDraft(wfIdx){
+  var wf = state.workflows[wfIdx];
+  var steps = getWorkflowSteps(wf);
+  var step = steps[wf.step - 1];
+  if(!step || !step.draftKey) return;
+  var draft = wf.drafts[step.draftKey];
+  if(!draft || draft === 'loading') return;
+  navigator.clipboard.writeText(draft).then(function(){
+    showToast('Draft copied to clipboard');
+  }).catch(function(){
+    showToast('Copy failed — please copy manually');
+  });
+}
+
+function advanceStep(idx){
+  var wf = state.workflows[idx];
+  var steps = getWorkflowSteps(wf);
+  if(wf.step < steps.length){
+    wf.step++;
+  }
+  renderWorkflows();
+}
+
+function closeWorkflow(idx){
+  state.actioned++;
+  state.workflows.splice(idx, 1);
+  updateStats();
+  renderWorkflows();
+}
+
+// ── Availability checker ──────────────────────────────────────────────────────
+function goToAvailability(dateStr){
+  if(dateStr) document.getElementById('avail-date-input').value = dateStr;
+  var el = document.querySelector('.ni[data-icon="calendar"]');
+  nav('avail', el);
+  if(dateStr) checkAvailability();
+}
+
+function checkAvailability(){
+  var dateVal = document.getElementById('avail-date-input').value;
+  if(!dateVal){ alert('Please select a date.'); return; }
+  var target = new Date(dateVal);
+  var start = new Date(target); start.setDate(start.getDate()-3);
+  var end   = new Date(target); end.setDate(end.getDate()+4);
+  var results = document.getElementById('avail-results');
+  results.innerHTML = '<div class="ai-loading"><div class="spinner"></div> Fetching calendar events...</div>';
+
+  var token = state.cfg.dropboxRefreshToken;
+  if(!token){
+    // Demo mode: show sample data
+    showSampleAvailability(dateVal);
+    return;
+  }
+
+  fetchCalendarEvents(start.toISOString(), end.toISOString())
+    .then(function(data){
+      processAvailability(data.value || [], dateVal, target, start, end);
+    }).catch(function(err){
+      results.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--t3);">Error fetching calendar: ' + escHtml(err.message) + '. Showing demo data below.</div>';
+      showSampleAvailability(dateVal);
+    });
+}
+
+function parseCalendarEvent(title){
+  if(!title) return null;
+  var raw   = title.trim();
+  var lower = raw.toLowerCase();
+
+  // ── Ignore rules ────────────────────────────────────────────────────────────
+  // Fw: events (no surveyor assigned yet)
+  if(lower.startsWith('fw:') || lower.startsWith('fwd:')) return null;
+  // TBA with no names
+  if(lower.startsWith('tba') && !containsSurveyor(raw)) return null;
+  // Weekend duty events (Survey Duty / Office Duty) — ignored for occupancy
+  if(lower.includes('survey duty') || lower.includes('office duty')) return null;
+
+  // ── Leave / exclusion rules ──────────────────────────────────────────────────
+  var isLeave     = lower.includes('annual leave') || lower.includes('on leave');
+  var isUnavail   = lower.includes('not available');
+  var isTraining  = lower.includes('training course') || lower.includes('training)') ||
+                    lower.includes('confined space') || lower.includes('course');
+
+  var isExcluded  = isLeave || isUnavail || isTraining;
+
+  // Partial unavailability — flagged but not fully excluded
+  var isPartial   = isUnavail && /after\s*\d/.test(lower);
+  if(isPartial) isExcluded = false; // partial: show with note, not excluded
+
+  // ── Tentative flag ───────────────────────────────────────────────────────────
+  var isTentative = lower.startsWith('tentative') || lower.includes('(tentative)') ||
+                    lower.includes('[awaiting job number]');
+
+  // ── Extract surveyor names from the front of the title ──────────────────────
+  // Strip leading "Tentative" if present
+  var working = raw.replace(/^tentative\s*/i, '');
+
+  // The name segment is everything before the job number pattern or a separator
+  // Job number pattern: YYYY/X#/NNN or YYYY/X#/NN/NNN
+  var jobNumPattern = /\b\d{4}\/X\d+\/[\d\/]+/;
+  var jobNumMatch   = working.match(jobNumPattern);
+  var nameSegment   = jobNumMatch ? working.substring(0, working.indexOf(jobNumMatch[0])) : working;
+
+  // Extract vessel name and job description after the job number
+  var vesselDesc = '';
+  if(jobNumMatch){
+    var afterJob = working.substring(working.indexOf(jobNumMatch[0]) + jobNumMatch[0].length).trim();
+    // Extract RI number if present
+    var riMatch = afterJob.match(/\(RI[:\s]*(\d+)\)/i);
+    // Remove RI number for cleaner display
+    var cleaned = afterJob.replace(/\(RI[:\s]*\d+\)/i, '').trim();
+    // Remove leading separator chars
+    cleaned = cleaned.replace(/^[-–\s]+/, '').trim();
+    vesselDesc = cleaned || afterJob;
+  } else {
+    // No job number — use everything after the name segment as description
+    vesselDesc = working;
+  }
+
+  // Clean up vessel/description — truncate at 60 chars
+  if(vesselDesc.length > 70) vesselDesc = vesselDesc.substring(0, 70) + '…';
+
+  // ── Split names by / or & ────────────────────────────────────────────────────
+  // Clean up separators in name segment
+  var namePart = nameSegment.replace(/[-:]/g, '/').replace(/&/g, '/');
+  var rawNames = namePart.split('/').map(function(n){ return n.trim(); });
+
+  // Match each token against surveyor master list
+  var separator = nameSegment.includes('&') ? '&' : '/';
+  var isWeekendDuty = separator === '&';
+
+  var matched = [];
+  rawNames.forEach(function(token){
+    // Try to match the start of token against surveyor names
+    state.surveyors.forEach(function(sname){
+      if(token.toLowerCase().startsWith(sname.toLowerCase())){
+        if(!matched.find(function(m){ return m === sname; })){
+          matched.push(sname);
+        }
+      }
+    });
+  });
+
+  if(!matched.length) return null;
+
+  return {
+    names:        matched,
+    isLeave:      isLeave,
+    isUnavail:    isUnavail && !isPartial,
+    isPartial:    isPartial,
+    isTraining:   isTraining,
+    isExcluded:   isExcluded,
+    isTentative:  isTentative,
+    isWeekendDuty:isWeekendDuty,
+    vesselDesc:   vesselDesc,
+    rawTitle:     raw,
+    jobNum:       jobNumMatch ? jobNumMatch[0] : ''
+  };
+}
+
+function containsSurveyor(title){
+  var lower = title.toLowerCase();
+  return state.surveyors.some(function(n){ return lower.includes(n.toLowerCase()); });
+}
+
+function processAvailability(events, dateVal, target, start, end){
+  var results = document.getElementById('avail-results');
+  var targetMs = new Date(dateVal).getTime();
+
+  // Day-of-week check for weekend priority
+  var targetDay = new Date(dateVal);
+  var isWeekend = targetDay.getDay() === 0 || targetDay.getDay() === 6;
+
+  // Build per-surveyor event map
+  var surveyorMap = {};
+  state.surveyors.forEach(function(name){
+    surveyorMap[name] = { jobs:[], excludedOnTarget:false, partialNote:'', weekendPriority:false };
+  });
+
+  events.forEach(function(ev){
+    var parsed = parseCalendarEvent(ev.subject);
+    if(!parsed) return;
+
+    var evStart = new Date(ev.start.dateTime || ev.start.date || ev.start);
+    var evEnd   = new Date(ev.end.dateTime   || ev.end.date   || ev.end);
+    evStart.setHours(0,0,0,0);
+    evEnd.setHours(0,0,0,0);
+    targetDay.setHours(0,0,0,0);
+
+    var overlapsTarget = evStart <= targetDay && evEnd > targetDay;
+    var isMultiDay     = (evEnd - evStart) > 86400000;
+
+    parsed.names.forEach(function(name){
+      if(!surveyorMap[name]) return;
+      var sm = surveyorMap[name];
+
+      // Weekend priority flag
+      if(parsed.isWeekendDuty && overlapsTarget){
+        sm.weekendPriority = true;
+        return; // Weekend duty doesn't block availability
+      }
+
+      // Full exclusion on target day
+      if(overlapsTarget && parsed.isExcluded){
+        sm.excludedOnTarget = true;
+        if(parsed.isTraining) sm.excludeReason = 'On training course';
+        else if(parsed.isLeave) sm.excludeReason = 'On annual leave';
+        else sm.excludeReason = 'Not available';
+        return;
+      }
+
+      // Partial unavailability — show with note
+      if(overlapsTarget && parsed.isPartial){
+        sm.partialNote = extractPartialNote(ev.subject);
+      }
+
+      // Add as a job entry (in window, for ±3 day calculation)
+      sm.jobs.push({
+        start:        evStart,
+        end:          evEnd,
+        overlapsTarget: overlapsTarget,
+        isMultiDay:   isMultiDay,
+        isTentative:  parsed.isTentative,
+        isExcluded:   parsed.isExcluded,
+        vesselDesc:   parsed.vesselDesc,
+        rawTitle:     parsed.rawTitle
+      });
+    });
+  });
+
+  // ── Categorise surveyors ─────────────────────────────────────────────────────
+  var green=[], yellow=[], red=[], purple=[], weekendPriority=[];
+
+  state.surveyors.forEach(function(name){
+    var sm = surveyorMap[name];
+
+    // Fully excluded — skip
+    if(sm.excludedOnTarget) return;
+
+    var activeJobs = sm.jobs.filter(function(j){ return !j.isExcluded; });
+
+    // Check if occupied on target (non-excluded, non-multiday single-day job)
+    var occupiedOnTarget   = activeJobs.some(function(j){ return j.overlapsTarget && !j.isMultiDay; });
+    // Multi-day overlap → purple
+    var multiDayOnTarget   = activeJobs.some(function(j){ return j.overlapsTarget && j.isMultiDay; });
+
+    if(multiDayOnTarget){
+      var mdJobs = activeJobs.filter(function(j){ return j.overlapsTarget && j.isMultiDay; });
+      purple.push({ name:name, jobs:mdJobs, partialNote:sm.partialNote, weekendPriority:sm.weekendPriority });
+      return;
+    }
+
+    if(occupiedOnTarget) return; // Single-day job on target — not shown
+
+    // ±3 day window jobs
+    var before = activeJobs.filter(function(j){
+      return !j.overlapsTarget && j.start.getTime() < targetMs && (targetMs - j.start.getTime()) <= 3*86400000;
+    });
+    var after = activeJobs.filter(function(j){
+      return !j.overlapsTarget && j.start.getTime() > targetMs && (j.start.getTime() - targetMs) <= 3*86400000;
+    });
+    var leaveInWindow = sm.jobs.filter(function(j){
+      return j.isExcluded && !j.overlapsTarget;
+    });
+
+    var entry = {
+      name:           name,
+      jobs:           before.concat(after),
+      leaveInWindow:  leaveInWindow,
+      partialNote:    sm.partialNote,
+      weekendPriority:sm.weekendPriority
+    };
+
+    // Weekend priority: push to front of green if applicable
+    if(sm.weekendPriority && isWeekend && !before.length && !after.length){
+      weekendPriority.push(entry);
+    } else if(!before.length && !after.length && !leaveInWindow.length){
+      green.push(entry);
+    } else if(before.length > 0 && after.length > 0){
+      red.push(entry);
+    } else {
+      yellow.push(entry);
+    }
+  });
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+  var html = '<div class="legend">' +
+    '<div class="li"><div class="ld" style="background:#2D6A4F"></div> No jobs ±3 days</div>' +
+    '<div class="li"><div class="ld" style="background:#EF9F27"></div> Job on one side</div>' +
+    '<div class="li"><div class="ld" style="background:#E24B4A"></div> Jobs on both sides</div>' +
+    '<div class="li"><div class="ld" style="background:#7F77DD"></div> Extended job on date</div>' +
+    (isWeekend ? '<div class="li"><div class="ld" style="background:#003087"></div> Weekend duty priority</div>' : '') +
+    '</div>';
+
+  function jobLine(j){
+    var targetD = new Date(dateVal); targetD.setHours(0,0,0,0);
+    var when = j.start.getTime() < targetD.getTime() ? '-' : '+';
+    var diff = Math.round(Math.abs(j.start.getTime() - targetD.getTime()) / 86400000);
+    var dateStr = j.start.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    var desc = escHtml(j.vesselDesc || j.rawTitle);
+    var tent = j.isTentative ? ' <span style="color:#EF9F27;font-size:10px;">[Tentative]</span>' : '';
+    return when + diff + ' day (' + dateStr + ') — ' + desc + tent;
+  }
+
+  function renderGroup(list, color, label, badge){
+    if(!list.length) return '';
+    var cards = list.map(function(s){
+      var lines = [];
+      if(s.jobs && s.jobs.length){
+        s.jobs.forEach(function(j){ lines.push(jobLine(j)); });
+      } else {
+        lines.push('Fully clear');
+      }
+      if(s.leaveInWindow && s.leaveInWindow.length){
+        lines.push('<span style="color:#B91C1C;font-size:10px;">⚠ On leave/unavailable within ±3 day window</span>');
+      }
+      if(s.partialNote){
+        lines.push('<span style="color:#EF9F27;font-size:10px;">⚠ ' + escHtml(s.partialNote) + '</span>');
+      }
+      var extraBadge = badge || '';
+      var teamsBadge = color === '#7F77DD'
+        ? '<span class="stag" style="background:#EDE9FE;color:#534AB7;margin-left:auto;">Check Teams</span>'
+        : '';
+      var wpBadge = s.weekendPriority
+        ? '<span class="stag" style="background:#E6EDF8;color:#003087;margin-left:4px;">Weekend priority</span>'
+        : '';
+      return '<div class="scard" onclick="this.classList.toggle(\'sel\')">' +
+        '<div class="sdot" style="background:' + color + '"></div>' +
+        '<div class="sname">' + escHtml(s.name) + '</div>' +
+        '<div class="sinfo">' + lines.join('<br>') + '</div>' +
+        teamsBadge + wpBadge +
+        '</div>';
+    }).join('');
+    return '<div class="ag">' +
+      '<div class="ag-hdr">' +
+      '<div class="ld" style="background:' + color + '"></div>' +
+      '<div class="ag-t" style="color:' + color + '">' + label + '</div>' +
+      '<div class="ag-c">' + list.length + ' surveyor' + (list.length!==1?'s':'') + '</div>' +
+      '</div>' + cards + '</div>';
+  }
+
+  if(isWeekend && weekendPriority.length){
+    html += renderGroup(weekendPriority, '#003087', 'Weekend duty — prioritised for this date');
+  }
+  html += renderGroup(green,  '#2D6A4F', 'Clear — no jobs within ±3 days');
+  html += renderGroup(yellow, '#EF9F27', 'Available — job on one side of window');
+  html += renderGroup(red,    '#E24B4A', 'Available — jobs on both sides of window');
+  html += renderGroup(purple, '#7F77DD', 'Extended job on date — confirm via Teams');
+
+  if(!weekendPriority.length && !green.length && !yellow.length && !red.length && !purple.length){
+    html += '<div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">No surveyor data found for this date range. Ensure Power Automate Flow 2 has run and calendar.json is populated in Dropbox.</div>';
+  }
+
+  results.innerHTML = html;
+}
+
+function extractPartialNote(title){
+  var m = title.match(/not available\s*(.{0,40})/i);
+  return m ? m[0] : 'Partially unavailable — check details';
+}
+
+function showSampleAvailability(dateVal){
+  // Sample events using real RINA calendar patterns
+  var sampleEvents = [
+    // Multi-day extended job overlapping target
+    { subject:'Jiahui 2026/X1/687 GOLD STAR (RI: 104268) - Continuation of Class & Statutory Annual Surveys', start:{date:shiftDate(dateVal,-2)}, end:{date:shiftDate(dateVal,3)} },
+    // Multi-surveyor job day before
+    { subject:'David/Rawat 2026/X1/835 BEAM (RI: 106095) - Renewal Extension Survey', start:{date:shiftDate(dateVal,-1)}, end:{date:shiftDate(dateVal,0)} },
+    // Tentative job after target
+    { subject:'Tentative Roderick 2026/X1/845 BARLIAN 1299 (RI: 102844) - Annual Survey', start:{date:shiftDate(dateVal,2)}, end:{date:shiftDate(dateVal,3)} },
+    // Job on both sides
+    { subject:'Gilbert 2026/X1/844 HANSA COLOMBO (RI: 100718) - Occasional Survey', start:{date:shiftDate(dateVal,-2)}, end:{date:shiftDate(dateVal,-1)} },
+    { subject:'Gilbert 2026/X1/852 IDON (RI: 106080) - Extension Survey', start:{date:shiftDate(dateVal,1)}, end:{date:shiftDate(dateVal,2)} },
+    // Annual leave
+    { subject:'Lixiang: Annual Leave', start:{date:shiftDate(dateVal,-3)}, end:{date:shiftDate(dateVal,4)} },
+    // Training course — excluded
+    { subject:'Nicholas/Faris: Confined Space Course', start:{date:shiftDate(dateVal,0)}, end:{date:shiftDate(dateVal,1)} },
+    // Partial unavailability
+    { subject:'Choy - not available (after 6pm)', start:{date:shiftDate(dateVal,0)}, end:{date:shiftDate(dateVal,1)} },
+    // Weekend duty (only shown if target is weekend)
+    { subject:'Haibo (Office Duty) / Zani & David (Survey Duty)', start:{date:shiftDate(dateVal,0)}, end:{date:shiftDate(dateVal,1)} },
+    // Awaiting job number
+    { subject:'Tentative Chris [Awaiting Job Number] ATHENA TBN - Change of Flag', start:{date:shiftDate(dateVal,1)}, end:{date:shiftDate(dateVal,2)} },
+  ];
+  var target = new Date(dateVal);
+  var start  = new Date(dateVal); start.setDate(start.getDate()-3);
+  var end    = new Date(dateVal); end.setDate(end.getDate()+4);
+  processAvailability(sampleEvents, dateVal, target, start, end);
+}
+
+function shiftDate(base, days){
+  var d = new Date(base); d.setDate(d.getDate()+days);
+  return d.toISOString().split('T')[0];
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+function createNotifications(classified){
+  classified.forEach(function(e){
+    var exists = state.notifications.find(function(n){ return n.emailId === e.id; });
+    if(exists) return;
+    var sc = SCENARIOS[e.scenario] || SCENARIOS.flag;
+    state.notifications.unshift({
+      id: 'n_' + Date.now() + Math.random(),
+      emailId: e.id,
+      scenario: e.scenario,
+      title: sc.label + (e.vessel_name ? ' — ' + e.vessel_name : ''),
+      text: (e.from ? (e.from.emailAddress ? e.from.emailAddress.name||e.from.emailAddress.address : String(e.from)) : 'Unknown') +
+            (e.survey_date ? ' · ' + formatDate(e.survey_date) : '') +
+            '. Click to open workflow.',
+      time: formatTime(e.receivedDateTime),
+      isHigh: e.scenario === 'class',
+      dismissed: false
+    });
+    // Browser push notification
+    var n = state.notifications[0];
+    sendBrowserNotification(n.title, n.text, e.scenario);
+  });
+  var total = state.notifications.filter(function(n){ return !n.dismissed; }).length;
+  document.getElementById('badge-notifs').textContent = total;
+}
+
+function renderNotifications(){
+  var list = document.getElementById('notif-list');
+  var active = state.notifications.filter(function(n){ return !n.dismissed; });
+  if(!active.length){
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">No notifications.</div>';
+    return;
+  }
+  list.innerHTML = active.map(function(n){
+    var sc = SCENARIOS[n.scenario] || SCENARIOS.flag;
+    return '<div class="nc' + (n.isHigh?' hp':'') + '" id="notif-' + n.id + '">' +
+      '<div class="nc-ico" style="background:' + sc.border + '18;">' +
+      getScenarioIcon(n.scenario, sc.border) +
+      '</div>' +
+      '<div class="nc-body">' +
+      '<div class="nc-title">' + escHtml(n.title) + '</div>' +
+      '<div class="nc-text">' + escHtml(n.text) + '</div>' +
+      '<div class="nc-time">' + n.time + (n.isHigh?' · High priority':'') + '</div>' +
+      '<div class="nc-acts">' +
+      '<button class="nb2 nb2-n" onclick="openEmail(\'' + n.emailId + '\')">Handle now ↗</button>' +
+      (n.isHigh ? '<button class="nb2" onclick="markActioned(\'' + n.id + '\')">Actioned</button>' : '') +
+      '<button class="dismiss-btn" onmouseenter="hoverDismiss(this,true)" onmouseleave="hoverDismiss(this,false)" onclick="confirmDismiss(\'' + n.id + '\',\'notification\')">Dismiss</button>' +
+      '</div></div></div>';
+  }).join('');
+}
+
+function hoverDismiss(btn, on){
+  btn.innerHTML = on ? '✕ Dismiss' : 'Dismiss';
+}
+
+function markActioned(nid){
+  var n = state.notifications.find(function(x){ return x.id === nid; });
+  if(n){ n.dismissed = true; state.actioned++; updateStats(); renderNotifications(); }
+}
+
+// ── Confirm overlay ───────────────────────────────────────────────────────────
+var pendingAction = null;
+function confirmDismiss(id, type){
+  pendingAction = { id:id, type:type };
+  document.getElementById('confirm-title').textContent = 'Dismiss this ' + type + '?';
+  document.getElementById('confirm-sub').textContent   = 'It will be removed from your list.';
+  document.getElementById('confirm-ok').onclick = function(){ executeDismiss(); hideConfirm(); };
+  document.getElementById('confirm-overlay').classList.add('show');
+}
+function executeDismiss(){
+  if(!pendingAction) return;
+  if(pendingAction.type === 'notification'){
+    var n = state.notifications.find(function(x){ return x.id === pendingAction.id; });
+    if(n){ n.dismissed = true; }
+    renderNotifications();
+    updateStats();
+  }
+  pendingAction = null;
+}
+function hideConfirm(){
+  document.getElementById('confirm-overlay').classList.remove('show');
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function updateStats(){
+  var unread = state.emails.filter(function(e){ return !e.isRead && e.scenario !== 'none'; }).length;
+  var wf     = state.workflows.length;
+  var flags  = state.notifications.filter(function(n){ return !n.dismissed; }).length;
+  document.getElementById('stat-unread').textContent   = unread;
+  document.getElementById('stat-wf').textContent       = wf;
+  document.getElementById('stat-actioned').textContent = state.actioned;
+  document.getElementById('stat-flags').textContent    = flags;
+  document.getElementById('badge-inbox').textContent   = unread;
+  document.getElementById('badge-wf').textContent      = wf;
+  document.getElementById('badge-notifs').textContent  = flags;
+}
+
+// ── Surveyor list ─────────────────────────────────────────────────────────────
+function renderSurveyors(){
+  var container = document.getElementById('surveyor-list-container');
+  container.innerHTML = state.surveyors.map(function(name, i){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--b1);border-radius:var(--radius-md);background:var(--bg1);margin-bottom:4px;">' +
+      '<span style="font-size:12px;color:var(--t1);">' + escHtml(name) + '</span>' +
+      '<button onclick="removeSurveyor(' + i + ')" style="font-size:10px;color:var(--t3);background:none;border:none;cursor:pointer;padding:2px 6px;">Remove</button>' +
+      '</div>';
+  }).join('');
+}
+function addSurveyor(){
+  var input = document.getElementById('new-surveyor-input');
+  var name = input.value.trim();
+  if(name && !state.surveyors.includes(name)){ state.surveyors.push(name); input.value=''; renderSurveyors(); }
+}
+function removeSurveyor(i){ state.surveyors.splice(i,1); renderSurveyors(); }
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg){
+  var t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--t1);color:var(--bg1);font-size:12px;padding:8px 14px;border-radius:8px;z-index:999;font-family:inherit;opacity:1;transition:opacity 0.3s;';
+  document.body.appendChild(t);
+  setTimeout(function(){ t.style.opacity='0'; setTimeout(function(){ t.remove(); },300); }, 2000);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function escHtml(str){
+  if(!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatTime(iso){
+  if(!iso) return '';
+  var d = new Date(iso);
+  var now = new Date();
+  if(d.toDateString() === now.toDateString()) return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  var yesterday = new Date(now); yesterday.setDate(now.getDate()-1);
+  if(d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+}
+function formatDate(iso){
+  if(!iso) return '';
+  try{ return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); } catch(e){ return iso; }
+}
+function getScenarioIcon(scenario, color){
+  var icons = {
+    survey:    '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M2 21c.6.5 1.2 1 2.5 1C7 22 7 20 9.5 20s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.3.8 4.4 2.1 6"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/></svg>',
+    plan:      '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
+    uwild:     '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 2v6"/><path d="M12 22v-2"/><path d="M4.93 4.93l4.24 4.24"/><path d="M14.83 14.83l4.24 4.24"/><path d="M2 12h6"/><path d="M16 12h6"/><circle cx="12" cy="12" r="4"/></svg>',
+    class:     '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
+    extension: '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    flag:      '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>'
+  };
+  return icons[scenario] || icons.flag;
+}
+</script>
+</body>
+</html>
