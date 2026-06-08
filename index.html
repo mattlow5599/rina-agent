@@ -1528,7 +1528,8 @@ function parseCalendarEvent(title){
   var isUnavail  = lower.includes('not available') || lower.includes(': unavailable') ||
                    lower.includes('off-in-lieu') || lower.includes('reservist');
   var isTraining = lower.includes('training course') || lower.includes('(training)') ||
-                   lower.includes('confined space') || lower.includes('office training');
+                   lower.includes('confined space') || lower.includes('office training') ||
+                   lower.includes(': training') || lower.includes('- training');
 
   var isPartial  = lower.includes('not available') && /after\s*\d/.test(lower);
   if(isPartial){ isUnavail = false; }
@@ -1549,11 +1550,31 @@ function parseCalendarEvent(title){
 
   var isWeekendDuty = firstSegment.includes('&') && !firstSegment.includes('/');
 
-  // Normalize separators — handle colon, dash, slash, ampersand
-  var namePart = firstSegment
-    .replace(/\s*&\s*/g, '/')
-    .replace(/\s*[:/]\s*/g, '/')
-    .replace(/\s*-\s*/g, '/');
+  // Normalize separators for name extraction
+  // For leave/unavailable/training events: ONLY split on : and / (not dash — "Glenn: Annual Leave" uses colon)
+  // For job events: split on : / & and dash
+  var namePart;
+  if(isExcluded){
+    // Leave/training: only use colon and slash as separators, NOT dash
+    // "Glenn: Annual Leave" -> "Glenn / Annual Leave"
+    // "Jiang - Annual Leave" -> special handling below
+    namePart = firstSegment
+      .replace(/\s*&\s*/g, '/')
+      .replace(/\s*:\s*/g, '/');
+    // For "Name - Annual Leave" pattern, only take everything before " - "
+    var dashLeaveMatch = firstSegment.match(/^(.+?)\s+-\s+(annual leave|on leave|not available|unavailable|off-in-lieu|reservist)/i);
+    if(dashLeaveMatch){
+      namePart = dashLeaveMatch[1];
+    }
+  } else {
+    namePart = firstSegment
+      .replace(/\s*&\s*/g, '/')
+      .replace(/\s*[:/]\s*/g, '/')
+      .replace(/\s*-\s*/g, '/');
+  }
+
+  // Remove any bracketed content from name segment (e.g. "(Training)", "(after 6pm)")
+  namePart = namePart.replace(/\([^)]*\)/g, '');
 
   var rawTokens = namePart.split('/').map(function(n){ return n.trim(); }).filter(Boolean);
 
@@ -1570,6 +1591,21 @@ function parseCalendarEvent(title){
 
   if(!matched.length) return null;
 
+  // For training events that include both qualified surveyors and trainees,
+  // only exclude the trainees — qualified surveyors are still assignable
+  // Exception: events like "David/Gilbert - Confined space training course" where
+  // ALL named surveyors are attending training (no trainee involved)
+  var hasTrainees  = matched.some(function(n){ return trainees.indexOf(n) !== -1; });
+  var hasQualified = matched.some(function(n){ return trainees.indexOf(n) === -1; });
+  var adjustedExcluded = isExcluded;
+  // Only override exclusion if this is a TENTATIVE event with mixed names
+  // e.g. "Tentative Roderick / Jerry (Training)" — Roderick is assigned, Jerry is shadowing
+  // Regular training events like "Rawat/Jerry/Mahadir (Training)" exclude everyone including Rawat
+  if(isTraining && hasTrainees && hasQualified && isTentative){
+    adjustedExcluded = false;
+    // Keep isTentative = true
+  }
+
   // ── Extract vessel description ───────────────────────────────────────────────
   var vesselDesc = '';
   var jobNumPattern = /\b\d{4}\/X\d+(?:\/\d+)+/;
@@ -1578,10 +1614,11 @@ function parseCalendarEvent(title){
   if(jobNumMatch){
     var afterJob = working.substring(working.indexOf(jobNumMatch[0]) + jobNumMatch[0].length).trim();
     afterJob = afterJob.replace(/\(RI[:\s]*\d+\)/gi, '').trim();
-    afterJob = afterJob.replace(/^[-–\s]+/, '').trim();
+    afterJob = afterJob.replace(/^[-–\s)]+/, '').trim();  // strip leading dashes, spaces, stray brackets
+    afterJob = afterJob.replace(/[)]+$/, '').trim();       // strip trailing brackets
     vesselDesc = afterJob || '';
   } else if(!isLeave && !isUnavail && !isTraining && !isPartial){
-    var afterName = working.substring(firstSegment.length).replace(/^[-:\s]+/,'').trim();
+    var afterName = working.substring(firstSegment.length).replace(/^[-:\s()]+/,'').trim();
     vesselDesc = afterName.substring(0, 60);
   }
 
@@ -1593,7 +1630,7 @@ function parseCalendarEvent(title){
     isUnavail:     isUnavail && !isPartial,
     isPartial:     isPartial,
     isTraining:    isTraining,
-    isExcluded:    isExcluded,
+    isExcluded:    adjustedExcluded,
     isTentative:   isTentative,
     isWeekendDuty: isWeekendDuty,
     vesselDesc:    vesselDesc,
@@ -1648,7 +1685,6 @@ function processAvailability(events, dateVal, target, start, end){
     parsed.names.forEach(function(name){
       var sm = surveyorMap[name];
       if(!sm) return; // trainee or not in master list — skip
-
       // Weekend duty — priority flag only
       if(parsed.isWeekendDuty && overlapsTarget){
         sm.weekendPriority = true;
