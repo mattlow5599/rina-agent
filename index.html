@@ -917,18 +917,20 @@ function classifyEmails(emails){
     }));
   }
   var promises = emails.map(function(msg){
-    var prompt = 'Classify this email into one of these scenarios:\n' +
-      '- survey: request for surveyor attendance, vessel ETA, boarding arrangements\n' +
-      '- plan: review and approval of drawings, CII, SEEMP, DMLC, SSP, DCS\n' +
-      '- uwild: underwater in lieu of dry-docking, in-water survey, IWS notation\n' +
-      '- class: Class Maintenance Statement or Certificate request\n' +
-      '- extension: extension of renewal survey, bottom survey, dry docking, due date\n' +
-      '- flag: requires Singapore office attention but does not fit above\n' +
-      '- none: routine, no action required\n\n' +
-      'Also extract: vessel_name (if mentioned), date (if mentioned, ISO format), client_name.\n' +
+    var prompt = 'You are an email classifier for RINA Singapore Marine office. Classify this email into one of these scenarios based on its content and intent:\n\n' +
+      '- survey: A request for surveyor attendance, vessel ETA notification, boarding arrangements, survey scheduling. Could come from a client, ship manager, or internal colleague forwarding a request.\n' +
+      '- plan: Request for review and approval of documents, drawings, CII Rating, SEEMP Part II/III, DMLC, SSP, DCS, or any technical document submission.\n' +
+      '- uwild: Request for underwater inspection in lieu of dry-docking, in-water survey, or anything mentioning IWS notation.\n' +
+      '- class: Request for Class Maintenance Statement or Class Certificate.\n' +
+      '- extension: Request for extension of renewal survey, bottom survey, dry docking due date, or survey extension application.\n' +
+      '- flag: The email requires action or attention from the Singapore office but does not fit the above categories. Use this for urgent matters, PSC detentions, incident notifications, document requests, billing queries that need response, or anything requiring a reply.\n' +
+      '- none: Routine internal notifications, automated system emails, acknowledgements, CC-only emails where no action is needed from Singapore, marketing emails, or emails that are purely informational with no action required.\n\n' +
+      'Important: Emails from internal RINA colleagues (e.g. @rina.org addresses) can still require action — classify based on content not sender.\n\n' +
+      'Also extract if present: vessel_name, date (ISO format), client_name.\n' +
       'Respond ONLY with valid JSON: {"scenario":"...","vessel_name":"...","date":"...","client_name":"..."}\n\n' +
-      'Subject: ' + msg.subject + '\n' +
-      'Preview: ' + msg.bodyPreview;
+      'Subject: ' + (msg.subject || '') + '\n' +
+      'From: ' + (msg.from || '') + '\n' +
+      'Preview: ' + (msg.body || msg.bodyPreview || '');
 
     return fetch('https://api.anthropic.com/v1/messages', {
       method:'POST',
@@ -945,10 +947,10 @@ function classifyEmails(emails){
           var clean = text.replace(/```json|```/g,'').trim();
           var parsed = JSON.parse(clean);
           return Object.assign({}, msg, {
-            scenario:      parsed.scenario || 'flag',
-            vessel_name:   parsed.vessel_name || '',
-            survey_date:   parsed.date || '',
-            client_name:   parsed.client_name || getFromDisplay(msg) || ''
+            scenario:    parsed.scenario || 'flag',
+            vessel_name: parsed.vessel_name || '',
+            survey_date: parsed.date || '',
+            client_name: parsed.client_name || getFromDisplay(msg) || ''
           });
         } catch(e){
           return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'' });
