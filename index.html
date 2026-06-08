@@ -935,6 +935,8 @@ function classifyEmails(emails){
     return fetch('https://rinaworker.matt-low5599.workers.dev', {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'x-api-key': state.cfg.sonnetKey||state.cfg.haikuKey||'', 'anthropic-version':'2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 200,
         messages:[{ role:'user', content: prompt }]
       })
