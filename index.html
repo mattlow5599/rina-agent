@@ -883,7 +883,8 @@ var BLOCKED_SENDERS = [
   'quarantine@messaging.microsoft.com',
   'suspensions@rina.org',
   'noreply@rina.org',
-  'leohelp@rina.org'
+  'MPA_Acknowledgement_SHIPPING@mpa.gov.sg',
+  'toc@rina.org'
 ];
 
 function isSenderBlocked(email){
@@ -1618,17 +1619,28 @@ function processAvailability(events, dateVal, target, start, end){
 
 function parseFrom(from){
   if(!from) return { name:'Unknown', address:'' };
-  // Already an object
   if(typeof from === 'object' && from.emailAddress){
     return { name: from.emailAddress.name || from.emailAddress.address || 'Unknown', address: from.emailAddress.address || '' };
   }
-  // Plain string — formats: "Name <email>" or just "email"
   var str = String(from).trim();
+  // Format: "Name <email>"
   var match = str.match(/^(.+?)\s*<([^>]+)>/);
   if(match) return { name: match[1].trim() || match[2].trim(), address: match[2].trim() };
-  // Just an email address
-  if(str.includes('@')) return { name: str, address: str };
-  return { name: str || 'Unknown', address: '' };
+  // Plain email address — derive a readable name from the domain
+  if(str.includes('@')){
+    var parts = str.split('@');
+    var localPart = parts[0].replace(/[._-]/g,' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    var domain = parts[1] || '';
+    // For known RINA addresses, just show the email
+    if(domain.toLowerCase().includes('rina.org')){
+      return { name: str, address: str };
+    }
+    // For external addresses, show domain as company name
+    var company = domain.split('.')[0];
+    company = company.charAt(0).toUpperCase() + company.slice(1);
+    return { name: company, address: str };
+  }
+  return { name: str || 'Unknown', address: str };
 }
 
 function getFromDisplay(email){
@@ -1843,13 +1855,16 @@ function escHtml(str){
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function formatTime(iso){
-  if(!iso) return '';
-  var d = new Date(iso);
-  var now = new Date();
-  if(d.toDateString() === now.toDateString()) return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  var yesterday = new Date(now); yesterday.setDate(now.getDate()-1);
-  if(d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  if(!iso || iso === '' || iso === 'undefined') return 'Recent';
+  try{
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return 'Recent';
+    var now = new Date();
+    if(d.toDateString() === now.toDateString()) return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    var yesterday = new Date(now); yesterday.setDate(now.getDate()-1);
+    if(d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  } catch(e){ return 'Recent'; }
 }
 function formatDate(iso){
   if(!iso) return '';
