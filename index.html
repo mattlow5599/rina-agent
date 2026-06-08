@@ -522,6 +522,7 @@ var state = {
   workflows: [],
   actioned: 0,
   surveyors: ['Roderick','Gilbert','Jiahui','Zani','Chris','Choy','Sufian','Jiang','Haibo','David','Rawat','Glenn','Lixiang','Nicholas','Faris','Ibrahim','Mahadir','Jerry'],
+  trainees: ['Jerry','Mahadir'],
   cfg: { sonnetKey:'', haikuKey:'', dropboxRefreshToken:'', mailbox:'singapore.marine@rina.org', calendar:'RINA Singapore Marine' },
   currentFilter: 'all',
   pollInterval: null,
@@ -542,6 +543,7 @@ var SCENARIOS = {
 window.onload = function(){
   try { loadSettings(); } catch(e){}
   try { loadBlockedSenders(); } catch(e){}
+  try { loadTrainees(); } catch(e){}
   try { renderSurveyors(); } catch(e){}
   try { updateLeaveUI(); } catch(e){}
   try { requestNotificationPermission(); } catch(e){}
@@ -1619,6 +1621,8 @@ function processAvailability(events, dateVal, target, start, end){
   // Build per-surveyor event map
   var surveyorMap = {};
   state.surveyors.forEach(function(name){
+    // Skip trainees — not yet qualified for independent assignments
+    if(state.trainees.indexOf(name) !== -1) return;
     surveyorMap[name] = { jobs:[], excludedOnTarget:false, excludeReason:'', partialNote:'', weekendPriority:false };
   });
 
@@ -2209,12 +2213,30 @@ function loadBlockedSenders(){
 function renderSurveyors(){
   var container = document.getElementById('surveyor-list-container');
   container.innerHTML = state.surveyors.map(function(name, i){
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--b1);border-radius:var(--radius-md);background:var(--bg1);margin-bottom:4px;">' +
-      '<span style="font-size:12px;color:var(--t1);">' + escHtml(name) + '</span>' +
+    var isTrainee = state.trainees.indexOf(name) !== -1;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--b1);border-radius:var(--radius-md);background:var(--bg1);margin-bottom:4px;' + (isTrainee?'opacity:0.6;':'') + '">' +
+      '<span style="font-size:12px;color:var(--t1);flex:1;">' + escHtml(name) + '</span>' +
+      (isTrainee ? '<span style="font-size:10px;color:#854F0B;background:#FAEEDA;padding:1px 6px;border-radius:8px;">Training</span>' : '') +
+      '<button onclick="toggleTrainee(\'' + escHtml(name) + '\')" style="font-size:10px;color:var(--t3);background:none;border:1px solid var(--b2);border-radius:4px;cursor:pointer;padding:2px 7px;" title="' + (isTrainee?'Mark as qualified':'Mark as training') + '">' +
+      (isTrainee ? 'Mark qualified' : 'Mark training') + '</button>' +
       '<button onclick="removeSurveyor(' + i + ')" style="font-size:10px;color:var(--t3);background:none;border:none;cursor:pointer;padding:2px 6px;">Remove</button>' +
       '</div>';
   }).join('');
 }
+
+function toggleTrainee(name){
+  var idx = state.trainees.indexOf(name);
+  if(idx === -1){ state.trainees.push(name); }
+  else { state.trainees.splice(idx, 1); }
+  localStorage.setItem('rina_trainees', JSON.stringify(state.trainees));
+  renderSurveyors();
+}
+
+function loadTrainees(){
+  var saved = localStorage.getItem('rina_trainees');
+  if(saved){ try{ state.trainees = JSON.parse(saved); } catch(e){} }
+}
+
 function addSurveyor(){
   var input = document.getElementById('new-surveyor-input');
   var name = input.value.trim();
