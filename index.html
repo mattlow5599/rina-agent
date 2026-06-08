@@ -983,8 +983,8 @@ function renderEmails(){
     if(e.scenario === 'class') tags += ' <span class="tag t-hp">High priority</span>';
     var from = getFromDisplay(e);
     var time = e.receivedDateTime ? formatTime(e.receivedDateTime) : '';
-    return '<div class="ec' + isFlagged + '" style="' + borderStyle + '" onclick="openEmail(\'' + e.id + '\')">' +
-      '<div class="ei">' +
+    return '<div class="ec' + isFlagged + '" style="' + borderStyle + '">' +
+      '<div class="ei" onclick="openEmail(\'' + e.id + '\')" style="cursor:pointer;">' +
       '<div class="eic" style="background:' + sc.border + '18;">' +
       getScenarioIcon(e.scenario, sc.border) +
       '</div>' +
@@ -993,8 +993,13 @@ function renderEmails(){
       '<div class="esub">' + escHtml(e.subject || '(no subject)') + '</div>' +
       '<div class="etags">' + tags + '</div>' +
       '</div>' +
-      '<div class="er"><div class="etm">' + time + '</div>' + dot + '</div>' +
-      '</div></div>';
+      '</div>' +
+      '<div class="er" style="padding-right:8px;gap:6px;">' +
+      '<div class="etm">' + time + '</div>' +
+      dot +
+      '<button onclick="dismissEmail(\'' + e.id + '\')" title="Dismiss" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:14px;padding:2px 4px;line-height:1;border-radius:4px;" onmouseover="this.style.color=\'#B91C1C\'" onmouseout="this.style.color=\'var(--t3)\'">✕</button>' +
+      '</div>' +
+      '</div>';
   }).join('');
 }
 
@@ -1092,10 +1097,11 @@ function renderWorkflow(wf, idx){
           'Review this draft. Copy to Outlook to send, or use the refine button to polish it.</div>' +
           '</div>';
         actionHtml = '<div class="arow">' +
-          '<button class="btn btn-ol" onclick="refineDraft(' + idx + ',' + (wf.step-1) + ')">✦ Refine with Claude ↗</button>' +
-          '<button class="btn" onclick="copyDraft(' + idx + ')">Copy draft</button>' +
+          '<button class="btn btn-ol" onclick="refineDraft(\'' + wf.emailId + '\',' + (wf.step-1) + ')">✦ Refine with Claude ↗</button>' +
+          '<button class="btn" onclick="copyDraft(\'' + wf.emailId + '\')">Copy draft</button>' +
           (wf.scenario === 'survey' || wf.scenario === 'uwild' || wf.scenario === 'extension' ? '<button class="btn btn-n" onclick="goToAvailability(\'' + (wf.surveyDate||'') + '\')">Check availability</button>' : '') +
-          (wf.step < steps.length ? '<button class="btn btn-n" onclick="advanceStep(' + idx + ')">Next step →</button>' : '<button class="btn btn-n" onclick="closeWorkflow(' + idx + ')">Complete workflow</button>') +
+          (wf.step < steps.length ? '<button class="btn btn-n" onclick="advanceStep(\'' + wf.emailId + '\')">Next step →</button>' : '<button class="btn btn-n" onclick="closeWorkflow(\'' + wf.emailId + '\')">Complete workflow</button>') +
+          '<button class="btn" onclick="closeWorkflow(\'' + wf.emailId + '\')">Close</button>' +
           '</div>';
       }
     } else if(currentStep && !currentStep.draftKey){
@@ -1103,7 +1109,8 @@ function renderWorkflow(wf, idx){
       actionHtml = '<div style="padding:12px;background:var(--nvl);border-radius:var(--radius-md);font-size:12px;color:var(--nvt);margin-bottom:10px;">' + (currentStep.manualNote||'Complete this step manually, then advance.') + '</div>' +
         '<div class="arow">' +
         (wf.scenario === 'survey' || wf.scenario === 'uwild' ? '<button class="btn btn-n" onclick="goToAvailability(\'' + (wf.surveyDate||'') + '\')">Check availability</button>' : '') +
-        '<button class="btn btn-n" onclick="advanceStep(' + idx + ')">Mark done → Next step</button>' +
+        '<button class="btn btn-n" onclick="advanceStep(\'' + wf.emailId + '\')">Mark done → Next step</button>' +
+        '<button class="btn" onclick="closeWorkflow(\'' + wf.emailId + '\')">Close</button>' +
         '</div>';
     }
   } else {
@@ -1236,20 +1243,21 @@ function getDraftTemplate(wf, draftKey){
   return templates[draftKey] || 'Dear Sir,\n\nPlease find our response below.\n\n[Draft content — please complete]';
 }
 
-function refineDraft(wfIdx, stepIdx){
-  var wf = state.workflows[wfIdx];
+function refineDraft(emailId, stepIdx){
+  var wf = state.workflows.find(function(w){ return w.emailId === emailId; });
+  if(!wf) return;
   var steps = getWorkflowSteps(wf);
   var step = steps[stepIdx];
   if(!step || !step.draftKey) return;
   var draft = wf.drafts[step.draftKey];
   var prompt = 'Please refine the following email draft for professional maritime correspondence. Make it grammatically correct, naturally worded, and well-spaced with proper paragraph breaks ready to paste into Outlook. Do not add a sign-off — the sender has an automatic Outlook signature:\n\n' + draft;
-  var key = state.cfg.sonnetKey;
-  if(!key){ alert('Add a Sonnet API key in Settings to use this feature.'); return; }
+  var key = state.cfg.sonnetKey || state.cfg.haikuKey;
+  if(!key){ alert('Add an API key in Settings to use this feature.'); return; }
   wf.drafts[step.draftKey] = 'loading';
   renderWorkflows();
   fetch('https://rinaworker.matt-low5599.workers.dev', {
     method:'POST',
-    headers:{ 'Content-Type':'application/json', 'x-api-key': state.cfg.sonnetKey||state.cfg.haikuKey||'', 'anthropic-version':'2023-06-01' },
+    headers:{ 'Content-Type':'application/json', 'x-api-key': key, 'anthropic-version':'2023-06-01' },
     body: JSON.stringify({
       model:'claude-sonnet-4-6',
       max_tokens:800,
@@ -1266,8 +1274,9 @@ function refineDraft(wfIdx, stepIdx){
     });
 }
 
-function copyDraft(wfIdx){
-  var wf = state.workflows[wfIdx];
+function copyDraft(emailId){
+  var wf = state.workflows.find(function(w){ return w.emailId === emailId; });
+  if(!wf) return;
   var steps = getWorkflowSteps(wf);
   var step = steps[wf.step - 1];
   if(!step || !step.draftKey) return;
@@ -1280,8 +1289,9 @@ function copyDraft(wfIdx){
   });
 }
 
-function advanceStep(idx){
-  var wf = state.workflows[idx];
+function advanceStep(emailId){
+  var wf = state.workflows.find(function(w){ return w.emailId === emailId; });
+  if(!wf) return;
   var steps = getWorkflowSteps(wf);
   if(wf.step < steps.length){
     wf.step++;
@@ -1289,10 +1299,26 @@ function advanceStep(idx){
   renderWorkflows();
 }
 
-function closeWorkflow(idx){
+function closeWorkflow(emailId){
+  var idx = state.workflows.findIndex(function(w){ return w.emailId === emailId; });
+  if(idx === -1) return;
   state.actioned++;
   state.workflows.splice(idx, 1);
   updateStats();
+  renderWorkflows();
+}
+
+function dismissEmail(id){
+  var email = state.emails.find(function(e){ return e.id === id; });
+  if(email){
+    email.scenario = 'none';
+    email.isRead = true;
+  }
+  // Also close any workflow for this email
+  var idx = state.workflows.findIndex(function(w){ return w.emailId === id; });
+  if(idx !== -1){ state.actioned++; state.workflows.splice(idx, 1); }
+  updateStats();
+  renderEmails();
   renderWorkflows();
 }
 
@@ -1338,10 +1364,291 @@ function parseCalendarEvent(title){
   if(lower.startsWith('fw:') || lower.startsWith('fwd:')) return null;
   if(lower.startsWith('tba') && !containsSurveyor(raw)) return null;
   if(lower.includes('survey duty') || lower.includes('office duty')) return null;
-  // Ignore meeting/operational events with no surveyor names
   if(lower.includes('masta operational') || lower.includes('microsoft teams meeting')) return null;
-  // Ignore CII meeting type events
   if(lower.startsWith('cii meeting')) return null;
+  if(lower.startsWith('kmt ') && !containsSurveyor(raw)) return null;
+
+  // ── Leave / exclusion rules ──────────────────────────────────────────────────
+  var isLeave    = lower.includes('annual leave') || lower.includes('on leave');
+  var isUnavail  = lower.includes('not available') || lower.includes(': unavailable') ||
+                   lower.includes('off-in-lieu') || lower.includes('reservist');
+  var isTraining = lower.includes('training course') || lower.includes('(training)') ||
+                   lower.includes('confined space') || lower.includes('office training');
+
+  var isPartial  = lower.includes('not available') && /after\s*\d/.test(lower);
+  if(isPartial){ isUnavail = false; }
+
+  var isExcluded = isLeave || (isUnavail && !isPartial) || isTraining;
+
+  // ── Tentative flag ───────────────────────────────────────────────────────────
+  var isTentative = lower.startsWith('tentative') || lower.includes('(tentative)') ||
+                    lower.includes('[awaiting job number]');
+
+  // ── Extract surveyor names ───────────────────────────────────────────────────
+  var working = raw.replace(/^tentative\s*/i, '').trim();
+
+  // Get everything before job number or square bracket
+  var firstSegment = working.split(/\s+2026\//)[0]
+                            .split(/\[/)[0]
+                            .trim();
+
+  var isWeekendDuty = firstSegment.includes('&') && !firstSegment.includes('/');
+
+  // Normalize separators — handle colon, dash, slash, ampersand
+  var namePart = firstSegment
+    .replace(/\s*&\s*/g, '/')
+    .replace(/\s*[:/]\s*/g, '/')
+    .replace(/\s*-\s*/g, '/');
+
+  var rawTokens = namePart.split('/').map(function(n){ return n.trim(); }).filter(Boolean);
+
+  var matched = [];
+  rawTokens.forEach(function(token){
+    state.surveyors.forEach(function(sname){
+      if(token.toLowerCase().startsWith(sname.toLowerCase())){
+        if(!matched.find(function(m){ return m === sname; })){
+          matched.push(sname);
+        }
+      }
+    });
+  });
+
+  if(!matched.length) return null;
+
+  // ── Extract vessel description ───────────────────────────────────────────────
+  var vesselDesc = '';
+  var jobNumPattern = /\b\d{4}\/X\d+(?:\/\d+)+/;
+  var jobNumMatch   = working.match(jobNumPattern);
+
+  if(jobNumMatch){
+    var afterJob = working.substring(working.indexOf(jobNumMatch[0]) + jobNumMatch[0].length).trim();
+    afterJob = afterJob.replace(/\(RI[:\s]*\d+\)/gi, '').trim();
+    afterJob = afterJob.replace(/^[-–\s]+/, '').trim();
+    vesselDesc = afterJob || '';
+  } else if(!isLeave && !isUnavail && !isTraining && !isPartial){
+    var afterName = working.substring(firstSegment.length).replace(/^[-:\s]+/,'').trim();
+    vesselDesc = afterName.substring(0, 60);
+  }
+
+  if(vesselDesc.length > 70) vesselDesc = vesselDesc.substring(0, 70) + '…';
+
+  return {
+    names:         matched,
+    isLeave:       isLeave,
+    isUnavail:     isUnavail && !isPartial,
+    isPartial:     isPartial,
+    isTraining:    isTraining,
+    isExcluded:    isExcluded,
+    isTentative:   isTentative,
+    isWeekendDuty: isWeekendDuty,
+    vesselDesc:    vesselDesc,
+    rawTitle:      raw,
+    jobNum:        jobNumMatch ? jobNumMatch[0] : ''
+  };
+}
+
+function isSameDateOrOverlaps(evStartMs, evEndMs, targetDateStr){
+  // target day boundaries
+  var tStart = new Date(targetDateStr); tStart.setHours(0,0,0,0);
+  var tEnd   = new Date(targetDateStr); tEnd.setHours(23,59,59,999);
+  var tStartMs = tStart.getTime();
+  var tEndMs   = tEnd.getTime();
+  // Event overlaps target day if event starts before end of target AND ends after start of target
+  return evStartMs <= tEndMs && evEndMs > tStartMs;
+}
+
+function processAvailability(events, dateVal, target, start, end){
+  var results = document.getElementById('avail-results');
+  var targetMs  = new Date(dateVal).getTime();
+  var targetDay = new Date(dateVal); targetDay.setHours(0,0,0,0);
+  var targetDayEnd = new Date(dateVal); targetDayEnd.setHours(23,59,59,999);
+
+  var isWeekend = targetDay.getDay() === 0 || targetDay.getDay() === 6;
+
+  // Build per-surveyor event map
+  var surveyorMap = {};
+  state.surveyors.forEach(function(name){
+    surveyorMap[name] = { jobs:[], excludedOnTarget:false, excludeReason:'', partialNote:'', weekendPriority:false };
+  });
+
+  events.forEach(function(ev){
+    var parsed = parseCalendarEvent(ev.subject);
+    if(!parsed) return;
+
+    var evStart = new Date(ev.start.dateTime || ev.start.date || ev.start);
+    var evEnd   = new Date(ev.end.dateTime   || ev.end.date   || ev.end);
+    var evStartMs = evStart.getTime();
+    var evEndMs   = evEnd.getTime();
+
+    var overlapsTarget = isSameDateOrOverlaps(evStartMs, evEndMs, dateVal);
+    // Multi-day: spans more than one calendar day
+    var evStartDay = new Date(evStart); evStartDay.setHours(0,0,0,0);
+    var evEndDay   = new Date(evEnd);   evEndDay.setHours(0,0,0,0);
+    var isMultiDay = evEndDay.getTime() > evStartDay.getTime();
+
+    parsed.names.forEach(function(name){
+      var sm = surveyorMap[name];
+      if(!sm) return;
+
+      // Weekend duty — priority flag only
+      if(parsed.isWeekendDuty && overlapsTarget){
+        sm.weekendPriority = true;
+        return;
+      }
+
+      // Full exclusion on target day
+      if(overlapsTarget && parsed.isExcluded){
+        sm.excludedOnTarget = true;
+        if(parsed.isTraining)   sm.excludeReason = 'On training course';
+        else if(parsed.isLeave) sm.excludeReason = 'On annual leave';
+        else                    sm.excludeReason = 'Not available';
+        return;
+      }
+
+      // Partial availability
+      if(overlapsTarget && parsed.isPartial){
+        sm.partialNote = extractPartialNote(ev.subject);
+      }
+
+      sm.jobs.push({
+        start:          evStart,
+        end:            evEnd,
+        startMs:        evStartMs,
+        endMs:          evEndMs,
+        overlapsTarget: overlapsTarget,
+        isMultiDay:     isMultiDay,
+        isTentative:    parsed.isTentative,
+        isExcluded:     parsed.isExcluded,
+        isTraining:     parsed.isTraining,
+        isLeave:        parsed.isLeave,
+        vesselDesc:     parsed.vesselDesc,
+        rawTitle:       parsed.rawTitle
+      });
+    });
+  });
+
+  // ── Categorise ───────────────────────────────────────────────────────────────
+  var green=[], yellow=[], red=[], purple=[], weekendPriority=[];
+  var windowStartMs = targetDay.getTime() - 3*86400000;
+  var windowEndMs   = targetDayEnd.getTime() + 3*86400000;
+
+  state.surveyors.forEach(function(name){
+    var sm = surveyorMap[name];
+    if(sm.excludedOnTarget) return; // excluded — not shown
+
+    var activeJobs = sm.jobs.filter(function(j){ return !j.isExcluded; });
+
+    var occupiedOnTarget  = activeJobs.some(function(j){ return j.overlapsTarget && !j.isMultiDay; });
+    var multiDayOnTarget  = activeJobs.some(function(j){ return j.overlapsTarget && j.isMultiDay; });
+
+    if(multiDayOnTarget){
+      var mdJobs = activeJobs.filter(function(j){ return j.overlapsTarget && j.isMultiDay; });
+      purple.push({ name:name, jobs:mdJobs, partialNote:sm.partialNote, weekendPriority:sm.weekendPriority });
+      return;
+    }
+
+    if(occupiedOnTarget) return; // Single-day job on target — not shown
+
+    // Check ±3 day window (excluding target day itself)
+    var before = activeJobs.filter(function(j){
+      return !j.overlapsTarget && j.startMs < targetDay.getTime() && j.startMs >= windowStartMs;
+    });
+    var after = activeJobs.filter(function(j){
+      return !j.overlapsTarget && j.startMs > targetDayEnd.getTime() && j.startMs <= windowEndMs;
+    });
+    var leaveInWindow = sm.jobs.filter(function(j){
+      return (j.isExcluded || j.isTraining) && !j.overlapsTarget &&
+             j.startMs <= windowEndMs && j.endMs >= windowStartMs;
+    });
+
+    var entry = {
+      name:            name,
+      jobs:            before.concat(after),
+      leaveInWindow:   leaveInWindow,
+      partialNote:     sm.partialNote,
+      weekendPriority: sm.weekendPriority
+    };
+
+    if(sm.weekendPriority && isWeekend && !before.length && !after.length){
+      weekendPriority.push(entry);
+    } else if(!before.length && !after.length && !leaveInWindow.length){
+      green.push(entry);
+    } else if(before.length > 0 && after.length > 0){
+      red.push(entry);
+    } else {
+      yellow.push(entry);
+    }
+  });
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+  var html = '<div class="legend">' +
+    '<div class="li"><div class="ld" style="background:#2D6A4F"></div> No jobs ±3 days</div>' +
+    '<div class="li"><div class="ld" style="background:#EF9F27"></div> Job on one side</div>' +
+    '<div class="li"><div class="ld" style="background:#E24B4A"></div> Jobs on both sides</div>' +
+    '<div class="li"><div class="ld" style="background:#7F77DD"></div> Extended job on date</div>' +
+    (isWeekend ? '<div class="li"><div class="ld" style="background:#003087"></div> Weekend duty priority</div>' : '') +
+    '</div>';
+
+  function jobLine(j){
+    var tDay = new Date(dateVal); tDay.setHours(0,0,0,0);
+    var when = j.startMs < tDay.getTime() ? '-' : '+';
+    var diff  = Math.round(Math.abs(j.startMs - tDay.getTime()) / 86400000);
+    if(diff === 0) diff = 1;
+    var dateStr = j.start.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    var desc = escHtml(j.vesselDesc || j.rawTitle.substring(0,60));
+    var tent = j.isTentative ? ' <span style="color:#EF9F27;font-size:10px;">[Tentative]</span>' : '';
+    return when + diff + ' day (' + dateStr + ') — ' + desc + tent;
+  }
+
+  function renderGroup(list, color, label){
+    if(!list.length) return '';
+    var cards = list.map(function(s){
+      var lines = [];
+      if(s.jobs && s.jobs.length){
+        s.jobs.forEach(function(j){ lines.push(jobLine(j)); });
+      } else {
+        lines.push('Fully clear');
+      }
+      if(s.leaveInWindow && s.leaveInWindow.length){
+        var hasTraining = s.leaveInWindow.some(function(j){ return j.isTraining; });
+        lines.push('<span style="color:#B91C1C;font-size:10px;">⚠ ' +
+          (hasTraining ? 'On training course within ±3 day window' : 'On leave/unavailable within ±3 day window') +
+          '</span>');
+      }
+      if(s.partialNote){
+        lines.push('<span style="color:#EF9F27;font-size:10px;">⚠ ' + escHtml(s.partialNote) + '</span>');
+      }
+      var teamsBadge = color === '#7F77DD'
+        ? '<span class="stag" style="background:#EDE9FE;color:#534AB7;margin-left:auto;">Check Teams</span>' : '';
+      var wpBadge = s.weekendPriority
+        ? '<span class="stag" style="background:#E6EDF8;color:#003087;margin-left:4px;">Weekend priority</span>' : '';
+      return '<div class="scard" onclick="this.classList.toggle(\'sel\')">' +
+        '<div class="sdot" style="background:' + color + '"></div>' +
+        '<div class="sname">' + escHtml(s.name) + '</div>' +
+        '<div class="sinfo">' + lines.join('<br>') + '</div>' +
+        teamsBadge + wpBadge + '</div>';
+    }).join('');
+    return '<div class="ag">' +
+      '<div class="ag-hdr"><div class="ld" style="background:' + color + '"></div>' +
+      '<div class="ag-t" style="color:' + color + '">' + label + '</div>' +
+      '<div class="ag-c">' + list.length + ' surveyor' + (list.length!==1?'s':'') + '</div></div>' +
+      cards + '</div>';
+  }
+
+  if(isWeekend && weekendPriority.length){
+    html += renderGroup(weekendPriority, '#003087', 'Weekend duty — prioritised for this date');
+  }
+  html += renderGroup(green,  '#2D6A4F', 'Clear — no jobs within ±3 days');
+  html += renderGroup(yellow, '#EF9F27', 'Available — job on one side of window');
+  html += renderGroup(red,    '#E24B4A', 'Available — jobs on both sides of window');
+  html += renderGroup(purple, '#7F77DD', 'Extended job on date — confirm via Teams');
+
+  if(!weekendPriority.length && !green.length && !yellow.length && !red.length && !purple.length){
+    html += '<div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">No surveyor data found. Ensure Power Automate Flow 2 has run and calendar.json is populated.</div>';
+  }
+
+  results.innerHTML = html;
+}
 
   // ── Leave / exclusion rules ──────────────────────────────────────────────────
   var isLeave    = lower.includes('annual leave') || lower.includes('on leave');
@@ -1438,201 +1745,6 @@ function containsSurveyor(title){
   return state.surveyors.some(function(n){ return lower.includes(n.toLowerCase()); });
 }
 
-function processAvailability(events, dateVal, target, start, end){
-  var results = document.getElementById('avail-results');
-  var targetMs = new Date(dateVal).getTime();
-
-  // Day-of-week check for weekend priority
-  var targetDay = new Date(dateVal);
-  var isWeekend = targetDay.getDay() === 0 || targetDay.getDay() === 6;
-
-  // Build per-surveyor event map
-  var surveyorMap = {};
-  state.surveyors.forEach(function(name){
-    surveyorMap[name] = { jobs:[], excludedOnTarget:false, partialNote:'', weekendPriority:false };
-  });
-
-  events.forEach(function(ev){
-    var parsed = parseCalendarEvent(ev.subject);
-    if(!parsed) return;
-
-    var evStart = new Date(ev.start.dateTime || ev.start.date || ev.start);
-    var evEnd   = new Date(ev.end.dateTime   || ev.end.date   || ev.end);
-    evStart.setHours(0,0,0,0);
-    evEnd.setHours(0,0,0,0);
-    targetDay.setHours(0,0,0,0);
-
-    var overlapsTarget = evStart <= targetDay && evEnd > targetDay;
-    var isMultiDay     = (evEnd - evStart) > 86400000;
-
-    parsed.names.forEach(function(name){
-      if(!surveyorMap[name]) return;
-      var sm = surveyorMap[name];
-
-      // Weekend priority flag
-      if(parsed.isWeekendDuty && overlapsTarget){
-        sm.weekendPriority = true;
-        return; // Weekend duty doesn't block availability
-      }
-
-    // Full exclusion on target day (leave, unavailable, training)
-    if(overlapsTarget && parsed.isExcluded){
-      sm.excludedOnTarget = true;
-      if(parsed.isTraining)      sm.excludeReason = 'On training course';
-      else if(parsed.isLeave)    sm.excludeReason = 'On annual leave';
-      else                       sm.excludeReason = 'Not available';
-      return;
-    }
-
-      // Partial unavailability — show with note
-      if(overlapsTarget && parsed.isPartial){
-        sm.partialNote = extractPartialNote(ev.subject);
-      }
-
-      // Add as a job entry (in window, for ±3 day calculation)
-      sm.jobs.push({
-        start:          evStart,
-        end:            evEnd,
-        overlapsTarget: overlapsTarget,
-        isMultiDay:     isMultiDay,
-        isTentative:    parsed.isTentative,
-        isExcluded:     parsed.isExcluded,
-        isTraining:     parsed.isTraining,
-        isLeave:        parsed.isLeave,
-        vesselDesc:     parsed.vesselDesc,
-        rawTitle:       parsed.rawTitle
-      });
-    });
-  });
-
-  // ── Categorise surveyors ─────────────────────────────────────────────────────
-  var green=[], yellow=[], red=[], purple=[], weekendPriority=[];
-
-  state.surveyors.forEach(function(name){
-    var sm = surveyorMap[name];
-
-    // Fully excluded — skip
-    if(sm.excludedOnTarget) return;
-
-    var activeJobs = sm.jobs.filter(function(j){ return !j.isExcluded; });
-
-    // Check if occupied on target (non-excluded, non-multiday single-day job)
-    var occupiedOnTarget   = activeJobs.some(function(j){ return j.overlapsTarget && !j.isMultiDay; });
-    // Multi-day overlap → purple
-    var multiDayOnTarget   = activeJobs.some(function(j){ return j.overlapsTarget && j.isMultiDay; });
-
-    if(multiDayOnTarget){
-      var mdJobs = activeJobs.filter(function(j){ return j.overlapsTarget && j.isMultiDay; });
-      purple.push({ name:name, jobs:mdJobs, partialNote:sm.partialNote, weekendPriority:sm.weekendPriority });
-      return;
-    }
-
-    if(occupiedOnTarget) return; // Single-day job on target — not shown
-
-    // ±3 day window jobs
-    var before = activeJobs.filter(function(j){
-      return !j.overlapsTarget && j.start.getTime() < targetMs && (targetMs - j.start.getTime()) <= 3*86400000;
-    });
-    var after = activeJobs.filter(function(j){
-      return !j.overlapsTarget && j.start.getTime() > targetMs && (j.start.getTime() - targetMs) <= 3*86400000;
-    });
-    var leaveInWindow = sm.jobs.filter(function(j){
-      return (j.isExcluded || j.isTraining) && !j.overlapsTarget;
-    });
-
-    var entry = {
-      name:           name,
-      jobs:           before.concat(after),
-      leaveInWindow:  leaveInWindow,
-      partialNote:    sm.partialNote,
-      weekendPriority:sm.weekendPriority
-    };
-
-    // Weekend priority: push to front of green if applicable
-    if(sm.weekendPriority && isWeekend && !before.length && !after.length){
-      weekendPriority.push(entry);
-    } else if(!before.length && !after.length && !leaveInWindow.length){
-      green.push(entry);
-    } else if(before.length > 0 && after.length > 0){
-      red.push(entry);
-    } else {
-      yellow.push(entry);
-    }
-  });
-
-  // ── Render ───────────────────────────────────────────────────────────────────
-  var html = '<div class="legend">' +
-    '<div class="li"><div class="ld" style="background:#2D6A4F"></div> No jobs ±3 days</div>' +
-    '<div class="li"><div class="ld" style="background:#EF9F27"></div> Job on one side</div>' +
-    '<div class="li"><div class="ld" style="background:#E24B4A"></div> Jobs on both sides</div>' +
-    '<div class="li"><div class="ld" style="background:#7F77DD"></div> Extended job on date</div>' +
-    (isWeekend ? '<div class="li"><div class="ld" style="background:#003087"></div> Weekend duty priority</div>' : '') +
-    '</div>';
-
-  function jobLine(j){
-    var targetD = new Date(dateVal); targetD.setHours(0,0,0,0);
-    var when = j.start.getTime() < targetD.getTime() ? '-' : '+';
-    var diff = Math.round(Math.abs(j.start.getTime() - targetD.getTime()) / 86400000);
-    var dateStr = j.start.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
-    var desc = escHtml(j.vesselDesc || j.rawTitle);
-    var tent = j.isTentative ? ' <span style="color:#EF9F27;font-size:10px;">[Tentative]</span>' : '';
-    return when + diff + ' day (' + dateStr + ') — ' + desc + tent;
-  }
-
-  function renderGroup(list, color, label, badge){
-    if(!list.length) return '';
-    var cards = list.map(function(s){
-      var lines = [];
-      if(s.jobs && s.jobs.length){
-        s.jobs.forEach(function(j){ lines.push(jobLine(j)); });
-      } else {
-        lines.push('Fully clear');
-      }
-      if(s.leaveInWindow && s.leaveInWindow.length){
-        var leaveLabel = s.leaveInWindow.some(function(j){ return j.isTraining; })
-          ? '<span style="color:#B91C1C;font-size:10px;">⚠ On training course within ±3 day window</span>'
-          : '<span style="color:#B91C1C;font-size:10px;">⚠ On leave/unavailable within ±3 day window</span>';
-        lines.push(leaveLabel);
-      }
-      if(s.partialNote){
-        lines.push('<span style="color:#EF9F27;font-size:10px;">⚠ ' + escHtml(s.partialNote) + '</span>');
-      }
-      var extraBadge = badge || '';
-      var teamsBadge = color === '#7F77DD'
-        ? '<span class="stag" style="background:#EDE9FE;color:#534AB7;margin-left:auto;">Check Teams</span>'
-        : '';
-      var wpBadge = s.weekendPriority
-        ? '<span class="stag" style="background:#E6EDF8;color:#003087;margin-left:4px;">Weekend priority</span>'
-        : '';
-      return '<div class="scard" onclick="this.classList.toggle(\'sel\')">' +
-        '<div class="sdot" style="background:' + color + '"></div>' +
-        '<div class="sname">' + escHtml(s.name) + '</div>' +
-        '<div class="sinfo">' + lines.join('<br>') + '</div>' +
-        teamsBadge + wpBadge +
-        '</div>';
-    }).join('');
-    return '<div class="ag">' +
-      '<div class="ag-hdr">' +
-      '<div class="ld" style="background:' + color + '"></div>' +
-      '<div class="ag-t" style="color:' + color + '">' + label + '</div>' +
-      '<div class="ag-c">' + list.length + ' surveyor' + (list.length!==1?'s':'') + '</div>' +
-      '</div>' + cards + '</div>';
-  }
-
-  if(isWeekend && weekendPriority.length){
-    html += renderGroup(weekendPriority, '#003087', 'Weekend duty — prioritised for this date');
-  }
-  html += renderGroup(green,  '#2D6A4F', 'Clear — no jobs within ±3 days');
-  html += renderGroup(yellow, '#EF9F27', 'Available — job on one side of window');
-  html += renderGroup(red,    '#E24B4A', 'Available — jobs on both sides of window');
-  html += renderGroup(purple, '#7F77DD', 'Extended job on date — confirm via Teams');
-
-  if(!weekendPriority.length && !green.length && !yellow.length && !red.length && !purple.length){
-    html += '<div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">No surveyor data found for this date range. Ensure Power Automate Flow 2 has run and calendar.json is populated in Dropbox.</div>';
-  }
-
-  results.innerHTML = html;
-}
 
 function parseFrom(from){
   if(!from) return { name:'Unknown', address:'' };
