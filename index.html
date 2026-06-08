@@ -1365,10 +1365,17 @@ function checkAvailability(){
 
   fetchCalendarEvents(start.toISOString(), end.toISOString())
     .then(function(data){
-      processAvailability(data.value || [], dateVal, target, start, end);
+      var evts = data.value || [];
+      console.log('Calendar events received:', evts.length);
+      if(evts.length > 0) console.log('First event:', JSON.stringify(evts[0]));
+      if(evts.length === 0){
+        results.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--t3);">No calendar events found in Dropbox. Check that calendar.json has data and Power Automate Flow 2 has run.</div>';
+        return;
+      }
+      processAvailability(evts, dateVal, target, start, end);
     }).catch(function(err){
-      results.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--t3);">Error fetching calendar: ' + escHtml(err.message) + '. Showing demo data below.</div>';
-      showSampleAvailability(dateVal);
+      console.error('Calendar fetch error:', err);
+      results.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--t3);">Error: ' + escHtml(err.message) + '</div>';
     });
 }
 
@@ -1492,9 +1499,14 @@ function processAvailability(events, dateVal, target, start, end){
 
     var evStart = parseEventDate(ev.start);
     var evEnd   = parseEventDate(ev.end);
-    if(!evStart || !evEnd) return;
+    if(!evStart || !evEnd){
+      console.warn('Invalid date for event:', ev.subject, ev.start, ev.end);
+      return;
+    }
     var evStartMs = evStart.getTime();
     var evEndMs   = evEnd.getTime();
+    var overlapsTarget = isSameDateOrOverlaps(evStartMs, evEndMs, dateVal);
+    if(overlapsTarget) console.log('Overlaps target:', ev.subject, '| names:', parsed.names, '| excluded:', parsed.isExcluded);
 
     var overlapsTarget = isSameDateOrOverlaps(evStartMs, evEndMs, dateVal);
     // Multi-day: event spans more than one calendar day in UTC
