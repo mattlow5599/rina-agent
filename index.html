@@ -524,7 +524,8 @@ var state = {
   surveyors: ['Roderick','Gilbert','Jiahui','Zani','Chris','Choy','Sufian','Jiang','Haibo','David','Rawat','Glenn','Lixiang','Nicholas','Faris','Ibrahim','Mahadir','Jerry'],
   cfg: { sonnetKey:'', haikuKey:'', dropboxRefreshToken:'', mailbox:'singapore.marine@rina.org', calendar:'RINA Singapore Marine' },
   currentFilter: 'all',
-  pollInterval: null
+  pollInterval: null,
+  lastAvailability: null
 };
 
 // Scenario config
@@ -1497,15 +1498,12 @@ function checkAvailability(){
   fetchCalendarEvents(start.toISOString(), end.toISOString())
     .then(function(data){
       var evts = data.value || [];
-      console.log('Calendar events received:', evts.length);
-      if(evts.length > 0) console.log('First event:', JSON.stringify(evts[0]));
       if(evts.length === 0){
         results.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--t3);">No calendar events found in Dropbox. Check that calendar.json has data and Power Automate Flow 2 has run.</div>';
         return;
       }
       processAvailability(evts, dateVal, target, start, end);
     }).catch(function(err){
-      console.error('Calendar fetch error:', err);
       results.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--t3);">Error: ' + escHtml(err.message) + '</div>';
     });
 }
@@ -1637,9 +1635,6 @@ function processAvailability(events, dateVal, target, start, end){
     var evStartMs = evStart.getTime();
     var evEndMs   = evEnd.getTime();
     var overlapsTarget = isSameDateOrOverlaps(evStartMs, evEndMs, dateVal);
-    if(overlapsTarget) console.log('Overlaps target:', ev.subject, '| names:', parsed.names, '| excluded:', parsed.isExcluded);
-
-    var overlapsTarget = isSameDateOrOverlaps(evStartMs, evEndMs, dateVal);
     // Multi-day: event spans more than one calendar day in UTC
     var evStartUTCDate = evStart.toISOString().split('T')[0];
     var evEndAdj = new Date(evEndMs - 1); // subtract 1ms to handle midnight-end
@@ -1740,6 +1735,17 @@ function processAvailability(events, dateVal, target, start, end){
     }
   });
 
+  // Sort yellow: surveyors with jobs furthest from target date appear first
+  yellow.sort(function(a, b){
+    var minDistA = a.jobs.length ? Math.min.apply(null, a.jobs.map(function(j){
+      return Math.abs(j.startMs - targetMs);
+    })) : 0;
+    var minDistB = b.jobs.length ? Math.min.apply(null, b.jobs.map(function(j){
+      return Math.abs(j.startMs - targetMs);
+    })) : 0;
+    return minDistB - minDistA; // descending — furthest first
+  });
+
   // ── Render ───────────────────────────────────────────────────────────────────
   var html = '<div class="legend">' +
     '<div class="li"><div class="ld" style="background:#2D6A4F"></div> No jobs ±3 days</div>' +
@@ -1807,7 +1813,128 @@ function processAvailability(events, dateVal, target, start, end){
     html += '<div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">No surveyor data found. Ensure Power Automate Flow 2 has run and calendar.json is populated.</div>';
   }
 
+  // Add Suggest button and suggestion panel
+  if(green.length || yellow.length || red.length){
+    html += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--b1);display:flex;align-items:center;gap:8px;">' +
+      '<button class="btn btn-n" onclick="suggestSurveyors(\'' + dateVal + '\')" style="font-size:11px;">' +
+      '✦ Suggest top 3 surveyors</button>' +
+      '<span style="font-size:10px;color:var(--t3);">Claude will recommend the best 3 and explain why</span>' +
+      '</div>' +
+      '<div id="suggest-panel" style="display:none;margin-top:10px;"></div>';
+  }
+
   results.innerHTML = html;
+
+  // Store availability data for suggest function
+  state.lastAvailability = {
+    dateVal: dateVal,
+    green: green,
+    yellow: yellow,
+    red: red,
+    purple: purple,
+    weekendPriority: weekendPriority
+  };
+}
+
+function suggestSurveyors(dateVal){
+  var panel = document.getElementById('suggest-panel');
+  if(!panel) return;
+
+  // Toggle off
+  if(panel.style.display === 'block'){
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="ai-loading"><div class="spinner"></div> Claude is analysing surveyor workload...</div>';
+
+  var key = state.cfg.sonnetKey || state.cfg.haikuKey;
+  if(!key){
+    panel.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--t3);">Add an Anthropic API key in Settings to use this feature.</div>';
+    return;
+  }
+
+  var av = state.lastAvailability;
+  if(!av){
+    panel.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--t3);">No availability data. Click Check calendar first.</div>';
+    return;
+  }
+
+  // Build a structured summary of all available surveyors and their jobs
+  function describeSurveyor(entry, tier){
+    var lines = [tier + ': ' + entry.name];
+    if(entry.jobs && entry.jobs.length){
+      entry.jobs.forEach(function(j){
+        var tDay = new Date(dateVal + 'T00:00:00Z');
+        var when = j.startMs < tDay.getTime() ? 'Before' : 'After';
+        var diff = Math.round(Math.abs(j.startMs - tDay.getTime()) / 86400000);
+        if(diff === 0) diff = 1;
+        var dateStr = j.start.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+        var desc = (j.vesselDesc || j.rawTitle || '').substring(0, 80);
+        lines.push('  ' + when + ' (' + diff + ' day' + (diff!==1?'s':'') + ', ' + dateStr + '): ' + desc + (j.isTentative?' [Tentative]':''));
+      });
+    } else {
+      lines.push('  No jobs in ±3 day window — fully clear');
+    }
+    if(entry.leaveInWindow && entry.leaveInWindow.length){
+      lines.push('  Note: Has leave/training within ±3 day window');
+    }
+    return lines.join('\n');
+  }
+
+  var surveyorData = [];
+  (av.weekendPriority||[]).forEach(function(e){ surveyorData.push(describeSurveyor(e,'Weekend duty priority')); });
+  (av.green||[]).forEach(function(e){ surveyorData.push(describeSurveyor(e,'Green — fully clear')); });
+  (av.yellow||[]).forEach(function(e){ surveyorData.push(describeSurveyor(e,'Yellow — job on one side')); });
+  (av.red||[]).forEach(function(e){ surveyorData.push(describeSurveyor(e,'Red — jobs on both sides')); });
+
+  if(!surveyorData.length){
+    panel.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--t3);">No available surveyors to suggest from.</div>';
+    return;
+  }
+
+  var prompt = 'You are a marine survey coordinator at RINA Singapore. Based on the following surveyor availability data for ' + dateVal + ', recommend the TOP 3 best surveyors to assign to a job on this date.\n\n' +
+    'AVAILABILITY DATA:\n' + surveyorData.join('\n\n') + '\n\n' +
+    'For each of your top 3 recommendations, provide:\n' +
+    '1. Surveyor name and your recommendation rank\n' +
+    '2. Why you recommend them (workload, proximity of surrounding jobs)\n' +
+    '3. Last job before the target date: job description and date (if any)\n' +
+    '4. Next job after the target date: vessel name, job description and date (if any)\n' +
+    '5. Any considerations or caveats\n\n' +
+    'Be concise and practical. Format as plain text with clear sections for each surveyor. No markdown symbols or bullet points.';
+
+  fetch('https://rinaworker.matt-low5599.workers.dev', {
+    method: 'POST',
+    headers:{
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 800,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  }).then(function(r){ return r.json(); })
+    .then(function(data){
+      var text = (data.content && data.content[0] && data.content[0].text) || 'Unable to generate suggestion.';
+      // Format the response — highlight surveyor names and section headers
+      var formatted = escHtml(text)
+        .replace(/\n\n/g, '</p><p style="margin-top:10px;">')
+        .replace(/\n/g, '<br>');
+      panel.innerHTML =
+        '<div style="border:1px solid var(--nvm);border-radius:var(--radius-md);overflow:hidden;">' +
+        '<div style="background:var(--nvl);padding:8px 12px;display:flex;align-items:center;gap:8px;">' +
+        '<span style="font-size:11px;font-weight:600;color:var(--nvt);">✦ Top 3 surveyor recommendations for ' + dateVal + '</span>' +
+        '<button onclick="document.getElementById(\'suggest-panel\').style.display=\'none\'" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--t3);font-size:13px;">✕</button>' +
+        '</div>' +
+        '<div style="padding:12px 14px;font-size:12px;color:var(--t2);line-height:1.75;background:var(--bg1);">' +
+        '<p>' + formatted + '</p>' +
+        '</div></div>';
+    }).catch(function(){
+      panel.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--t3);">Failed to generate suggestion. Check your API key.</div>';
+    });
 }
 
 function containsSurveyor(title){
