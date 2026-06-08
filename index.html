@@ -1010,7 +1010,8 @@ function renderEmails(){
       ? 'previewEmail(\'' + e.id + '\')'
       : 'openEmail(\'' + e.id + '\')';
     var opacity = isFyiEmail ? 'opacity:0.65;' : '';
-    return '<div class="ec' + isFlagged + '" style="' + borderStyle + opacity + '">' +
+    var summaryId = 'summary-' + e.id.replace(/[^a-z0-9]/gi,'');
+    return '<div class="ec' + isFlagged + '" style="' + borderStyle + opacity + '" id="card-' + summaryId + '">' +
       '<div class="ei" onclick="' + clickHandler + '" style="cursor:pointer;">' +
       '<div class="eic" style="background:' + sc.border + '18;">' +
       getScenarioIcon(e.scenario, sc.border) +
@@ -1024,8 +1025,10 @@ function renderEmails(){
       '<div class="er" style="padding-right:8px;gap:6px;">' +
       '<div class="etm">' + time + '</div>' +
       dot +
+      '<button onclick="summariseEmail(\'' + e.id + '\',\'' + summaryId + '\')" title="Summarise" style="background:none;border:1px solid var(--b2);border-radius:4px;cursor:pointer;color:var(--t3);font-size:10px;padding:2px 6px;white-space:nowrap;" onmouseover="this.style.borderColor=\'var(--nv)\';this.style.color=\'var(--nvt)\'" onmouseout="this.style.borderColor=\'var(--b2)\';this.style.color=\'var(--t3)\'">✦ Brief</button>' +
       '<button onclick="dismissEmail(\'' + e.id + '\')" title="Dismiss" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:14px;padding:2px 4px;line-height:1;border-radius:4px;" onmouseover="this.style.color=\'#B91C1C\'" onmouseout="this.style.color=\'var(--t3)\'">✕</button>' +
       '</div>' +
+      '<div id="' + summaryId + '" style="display:none;padding:10px 14px 12px;border-top:1px solid var(--b1);background:var(--bg2);font-size:12px;color:var(--t2);line-height:1.7;"></div>' +
       '</div>';
   }
 
@@ -1063,12 +1066,80 @@ function toggleFyi(){
 }
 
 function previewEmail(id){
-  // For FYI emails — just mark as read, no workflow
   var email = state.emails.find(function(e){ return e.id === id; });
   if(email){ email.isRead = true; }
   updateStats();
   renderEmails();
   showToast('FYI — no action required for this email');
+}
+
+function summariseEmail(emailId, summaryId){
+  var email = state.emails.find(function(e){ return e.id === emailId; });
+  if(!email) return;
+  var panel = document.getElementById(summaryId);
+  if(!panel) return;
+
+  // Toggle off if already showing
+  if(panel.style.display === 'block'){
+    panel.style.display = 'none';
+    return;
+  }
+
+  // Show loading
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="ai-loading"><div class="spinner"></div> Summarising with Claude...</div>';
+
+  var key = state.cfg.sonnetKey || state.cfg.haikuKey;
+  if(!key){
+    panel.innerHTML = '<div style="color:var(--t3);">Add an Anthropic API key in Settings to use this feature.</div>';
+    return;
+  }
+
+  var subject = email.subject || '(no subject)';
+  var body    = email.body || email.bodyPreview || '(no content)';
+  var from    = getFromDisplay(email);
+
+  var prompt = 'You are a summariser for a marine surveyor at RINA Singapore. Analyse this email and provide a concise briefing.\n\n' +
+    'From: ' + from + '\n' +
+    'Subject: ' + subject + '\n' +
+    'Content: ' + body + '\n\n' +
+    'Provide a brief structured summary with these sections:\n' +
+    '**Purpose/Request:** What is being asked or communicated?\n' +
+    '**Key Details:** Vessel name, dates, specific requirements or references (if any)\n' +
+    '**Current State:** What is the current situation or progress based on this email?\n' +
+    '**Action Required:** What does the Singapore office need to do? If no action needed, say so clearly.\n\n' +
+    'Be concise — 2-3 sentences per section maximum. Use plain text, no markdown symbols.';
+
+  fetch('https://rinaworker.matt-low5599.workers.dev', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 400,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  }).then(function(r){ return r.json(); })
+    .then(function(data){
+      var text = (data.content && data.content[0] && data.content[0].text) || 'Unable to summarise this email.';
+      // Format sections with colour
+      var formatted = text
+        .replace(/Purpose\/Request:/g, '<strong style="color:var(--nvt);">Purpose / Request:</strong>')
+        .replace(/Key Details:/g, '<strong style="color:var(--nvt);">Key Details:</strong>')
+        .replace(/Current State:/g, '<strong style="color:var(--nvt);">Current State:</strong>')
+        .replace(/Action Required:/g, '<strong style="color:var(--nvt);">Action Required:</strong>')
+        .replace(/\n/g, '<br>');
+      panel.innerHTML = formatted +
+        '<div style="margin-top:8px;display:flex;gap:6px;">' +
+        '<button class="btn btn-n" style="font-size:10px;padding:4px 10px;" onclick="openEmail(\'' + emailId + '\')">Open workflow ↗</button>' +
+        '<button class="btn" style="font-size:10px;padding:4px 10px;" onclick="document.getElementById(\'' + summaryId + '\').style.display=\'none\'">Close</button>' +
+        '</div>';
+    }).catch(function(){
+      panel.innerHTML = '<div style="color:var(--t3);">Failed to summarise. Check your API key in Settings.</div>';
+    });
 }
 
 function filterEmails(type, el){
