@@ -1647,7 +1647,7 @@ function processAvailability(events, dateVal, target, start, end){
 
     parsed.names.forEach(function(name){
       var sm = surveyorMap[name];
-      if(!sm) return;
+      if(!sm) return; // trainee or not in master list — skip
 
       // Weekend duty — priority flag only
       if(parsed.isWeekendDuty && overlapsTarget){
@@ -1692,8 +1692,10 @@ function processAvailability(events, dateVal, target, start, end){
   var windowEndMs   = targetDayEnd.getTime() + 3*86400000;
 
   state.surveyors.forEach(function(name){
+    // Skip trainees
+    if(state.trainees.indexOf(name) !== -1) return;
     var sm = surveyorMap[name];
-    if(sm.excludedOnTarget) return; // excluded — not shown
+    if(!sm) return;
 
     var activeJobs = sm.jobs.filter(function(j){ return !j.isExcluded; });
 
