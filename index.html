@@ -851,10 +851,9 @@ function scanNow(){
     });
     // Filter out blocked senders
     var actionable = newEmails.filter(function(m){
-      return !isSenderBlocked(m.from);
+      return !isSenderBlocked(m);
     });
-    // Mark blocked as seen so they don't reappear
-    newEmails.filter(function(m){ return isSenderBlocked(m.from); }).forEach(function(m){
+    newEmails.filter(function(m){ return isSenderBlocked(m); }).forEach(function(m){
       state.emails.push(Object.assign({}, m, { scenario:'none', isRead:true }));
     });
     if(actionable.length === 0){
@@ -888,8 +887,7 @@ var BLOCKED_SENDERS = [
 ];
 
 function isSenderBlocked(email){
-  if(!email) return false;
-  var addr = String(email).toLowerCase();
+  var addr = getFromAddress(email).toLowerCase();
   return BLOCKED_SENDERS.some(function(b){
     return addr.includes(b.toLowerCase());
   });
@@ -934,7 +932,7 @@ function classifyEmails(emails){
             scenario:      parsed.scenario || 'flag',
             vessel_name:   parsed.vessel_name || '',
             survey_date:   parsed.date || '',
-            client_name:   parsed.client_name || msg.from.emailAddress.name || ''
+            client_name:   parsed.client_name || getFromDisplay(msg) || ''
           });
         } catch(e){
           return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'' });
@@ -965,7 +963,7 @@ function renderEmails(){
     var dot = (!e.isRead) ? '<div class="udot"></div>' : '';
     var tags = '<span class="tag ' + sc.cls + '">' + sc.label + '</span>';
     if(e.scenario === 'class') tags += ' <span class="tag t-hp">High priority</span>';
-    var from = e.from && e.from.emailAddress ? (e.from.emailAddress.name || e.from.emailAddress.address) : 'Unknown';
+    var from = getFromDisplay(e);
     var time = e.receivedDateTime ? formatTime(e.receivedDateTime) : '';
     return '<div class="ec' + isFlagged + '" style="' + borderStyle + '" onclick="openEmail(\'' + e.id + '\')">' +
       '<div class="ei">' +
@@ -998,11 +996,7 @@ function openEmail(id){
   renderEmails();
   var existing = state.workflows.find(function(w){ return w.emailId === id; });
   if(!existing){
-    var fromName = '';
-    if(email.from){
-      if(typeof email.from === 'string') fromName = email.from;
-      else if(email.from.emailAddress) fromName = email.from.emailAddress.name || email.from.emailAddress.address || '';
-    }
+    var fromName = getFromDisplay(email);
     var wf = {
       emailId:    id,
       email:      email,
@@ -1098,7 +1092,7 @@ function renderWorkflow(wf, idx){
     actionHtml = '<div style="padding:10px;font-size:12px;color:var(--t3);">Workflow complete.</div>';
   }
 
-  var from = wf.email && wf.email.from ? (wf.email.from.emailAddress.name || wf.email.from.emailAddress.address) : 'Unknown';
+  var from = getFromDisplay(wf.email);
   var title = (wf.vesselName || wf.email.subject || 'Email').substring(0,40);
 
   return '<div class="wfc">' +
@@ -1622,7 +1616,30 @@ function processAvailability(events, dateVal, target, start, end){
   results.innerHTML = html;
 }
 
-function extractPartialNote(title){
+function parseFrom(from){
+  if(!from) return { name:'Unknown', address:'' };
+  // Already an object
+  if(typeof from === 'object' && from.emailAddress){
+    return { name: from.emailAddress.name || from.emailAddress.address || 'Unknown', address: from.emailAddress.address || '' };
+  }
+  // Plain string — formats: "Name <email>" or just "email"
+  var str = String(from).trim();
+  var match = str.match(/^(.+?)\s*<([^>]+)>/);
+  if(match) return { name: match[1].trim() || match[2].trim(), address: match[2].trim() };
+  // Just an email address
+  if(str.includes('@')) return { name: str, address: str };
+  return { name: str || 'Unknown', address: '' };
+}
+
+function getFromDisplay(email){
+  var f = parseFrom(email.from);
+  return f.name;
+}
+
+function getFromAddress(email){
+  var f = parseFrom(email.from);
+  return f.address || f.name;
+}
   var m = title.match(/not available\s*(.{0,40})/i);
   return m ? m[0] : 'Partially unavailable — check details';
 }
@@ -1672,7 +1689,7 @@ function createNotifications(classified){
       emailId: e.id,
       scenario: e.scenario,
       title: sc.label + (e.vessel_name ? ' — ' + e.vessel_name : ''),
-      text: (e.from ? (e.from.emailAddress ? e.from.emailAddress.name||e.from.emailAddress.address : String(e.from)) : 'Unknown') +
+      text: getFromDisplay(e) +
             (e.survey_date ? ' · ' + formatDate(e.survey_date) : '') +
             '. Click to open workflow.',
       time: formatTime(e.receivedDateTime),
