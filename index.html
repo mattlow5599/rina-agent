@@ -834,18 +834,33 @@ function dropboxRead(filename){
   });
 }
 
+function parseEventDate(val){
+  if(!val) return null;
+  // Handle object format {dateTime: "..."} or {date: "..."}
+  if(typeof val === 'object'){
+    val = val.dateTime || val.date || '';
+  }
+  var str = String(val).trim();
+  // Truncate sub-millisecond precision: .0000000 -> .000
+  str = str.replace(/(\.\d{3})\d+/, '$1');
+  // If no timezone info, treat as UTC to avoid local timezone shifts
+  // "2026-06-09T01:00:00" -> "2026-06-09T01:00:00Z" (but only if no tz already)
+  if(str.includes('T') && !str.includes('Z') && !str.includes('+') && str.lastIndexOf('-') < 8){
+    str = str + 'Z';
+  }
+  var d = new Date(str);
+  if(!isNaN(d.getTime())) return d;
+  // Fallback: date-only
+  var dateOnly = str.split('T')[0];
+  d = new Date(dateOnly + 'T00:00:00Z');
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function fetchCalendarEvents(startDate, endDate){
+  // Pass ALL events — processAvailability handles window filtering
+  // This ensures multi-day events starting before the window are included
   return dropboxRead('calendar.json').then(function(events){
-    // Include any event that overlaps the window
-    // (event starts before window end AND event ends after window start)
-    var winStart = new Date(startDate).getTime();
-    var winEnd   = new Date(endDate).getTime();
-    var filtered = (events||[]).filter(function(ev){
-      var evStart = new Date(ev.start.dateTime || ev.start.date || ev.start).getTime();
-      var evEnd   = new Date(ev.end.dateTime   || ev.end.date   || ev.end).getTime();
-      return evStart <= winEnd && evEnd >= winStart;
-    });
-    return { value: filtered };
+    return { value: events || [] };
   });
 }
 
@@ -1450,22 +1465,20 @@ function parseCalendarEvent(title){
 }
 
 function isSameDateOrOverlaps(evStartMs, evEndMs, targetDateStr){
-  // target day boundaries
-  var tStart = new Date(targetDateStr); tStart.setHours(0,0,0,0);
-  var tEnd   = new Date(targetDateStr); tEnd.setHours(23,59,59,999);
-  var tStartMs = tStart.getTime();
-  var tEndMs   = tEnd.getTime();
-  // Event overlaps target day if event starts before end of target AND ends after start of target
-  return evStartMs <= tEndMs && evEndMs > tStartMs;
+  // Use the target date string directly to avoid timezone issues
+  // target day in UTC: from midnight to end of day
+  var tStart = new Date(targetDateStr + 'T00:00:00Z').getTime();
+  var tEnd   = new Date(targetDateStr + 'T23:59:59Z').getTime();
+  // Event overlaps target day if starts before day ends AND ends after day starts
+  return evStartMs <= tEnd && evEndMs > tStart;
 }
 
 function processAvailability(events, dateVal, target, start, end){
   var results = document.getElementById('avail-results');
-  var targetMs  = new Date(dateVal).getTime();
-  var targetDay = new Date(dateVal); targetDay.setHours(0,0,0,0);
-  var targetDayEnd = new Date(dateVal); targetDayEnd.setHours(23,59,59,999);
-
-  var isWeekend = targetDay.getDay() === 0 || targetDay.getDay() === 6;
+  var targetDay    = new Date(dateVal + 'T00:00:00Z');
+  var targetDayEnd = new Date(dateVal + 'T23:59:59Z');
+  var targetMs     = targetDay.getTime();
+  var isWeekend    = targetDay.getUTCDay() === 0 || targetDay.getUTCDay() === 6;
 
   // Build per-surveyor event map
   var surveyorMap = {};
@@ -1477,16 +1490,18 @@ function processAvailability(events, dateVal, target, start, end){
     var parsed = parseCalendarEvent(ev.subject);
     if(!parsed) return;
 
-    var evStart = new Date(ev.start.dateTime || ev.start.date || ev.start);
-    var evEnd   = new Date(ev.end.dateTime   || ev.end.date   || ev.end);
+    var evStart = parseEventDate(ev.start);
+    var evEnd   = parseEventDate(ev.end);
+    if(!evStart || !evEnd) return;
     var evStartMs = evStart.getTime();
     var evEndMs   = evEnd.getTime();
 
     var overlapsTarget = isSameDateOrOverlaps(evStartMs, evEndMs, dateVal);
-    // Multi-day: spans more than one calendar day
-    var evStartDay = new Date(evStart); evStartDay.setHours(0,0,0,0);
-    var evEndDay   = new Date(evEnd);   evEndDay.setHours(0,0,0,0);
-    var isMultiDay = evEndDay.getTime() > evStartDay.getTime();
+    // Multi-day: event spans more than one calendar day in UTC
+    var evStartUTCDate = evStart.toISOString().split('T')[0];
+    var evEndAdj = new Date(evEndMs - 1); // subtract 1ms to handle midnight-end
+    var evEndUTCDate = evEndAdj.toISOString().split('T')[0];
+    var isMultiDay = evEndUTCDate > evStartUTCDate;
 
     parsed.names.forEach(function(name){
       var sm = surveyorMap[name];
