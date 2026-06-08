@@ -539,21 +539,25 @@ var SCENARIOS = {
 
 // ── Init ────────────────────────────────────────────────────────────────────
 window.onload = function(){
-  loadSettings();
-  loadBlockedSenders();
-  renderSurveyors();
-  updateLeaveUI();
-  requestNotificationPermission();
-  if(state.cfg.dropboxRefreshToken && !state.paused){
-    setLiveStatus(true, 'Monitoring mailbox — live');
-    startAutoPoll();
-  } else if(state.paused){
-    setLiveStatus(false, 'Agent paused — on leave');
-  } else {
-    setLiveStatus(false, 'Configure Dropbox token in Settings');
-  }
+  try { loadSettings(); } catch(e){}
+  try { loadBlockedSenders(); } catch(e){}
+  try { renderSurveyors(); } catch(e){}
+  try { updateLeaveUI(); } catch(e){}
+  try { requestNotificationPermission(); } catch(e){}
   var today = new Date().toISOString().split('T')[0];
-  document.getElementById('avail-date-input').value = today;
+  var di = document.getElementById('avail-date-input');
+  if(di) di.value = today;
+  // Defer connection attempt so UI renders first
+  setTimeout(function(){
+    if(state.cfg.dropboxRefreshToken && !state.paused){
+      setLiveStatus(true, 'Monitoring mailbox — live');
+      startAutoPoll();
+    } else if(state.paused){
+      setLiveStatus(false, 'Agent paused — on leave');
+    } else {
+      setLiveStatus(false, 'Configure Dropbox token in Settings');
+    }
+  }, 500);
 };
 
 // ── Theme ───────────────────────────────────────────────────────────────────
@@ -660,12 +664,17 @@ function updateLeaveUI(){
 function startAutoPoll(){
   if(state.pollInterval) clearInterval(state.pollInterval);
   if(!state.cfg.dropboxRefreshToken) return;
-  // Start longpoll for near-instant email detection
-  startLongpoll();
-  // Also poll calendar every 5 minutes as fallback
-  state.pollInterval = setInterval(function(){
-    if(!state.paused) scanNow();
-  }, 5 * 60 * 1000);
+  // Test connection first before starting longpoll
+  getDropboxAccessToken().then(function(){
+    setLiveStatus(true, 'Monitoring mailbox — live');
+    startLongpoll();
+    state.pollInterval = setInterval(function(){
+      if(!state.paused) scanNow();
+    }, 5 * 60 * 1000);
+  }).catch(function(err){
+    setLiveStatus(false, 'Connection failed — check Settings');
+    console.warn('Dropbox connection error:', err.message);
+  });
 }
 
 // ── Dropbox longpoll — near-instant detection ─────────────────────────────────
@@ -776,29 +785,35 @@ var DROPBOX_APP_SECRET = 'tcmgc3q5j8abgd6';
 
 function getDropboxAccessToken(){
   var now = Date.now();
-  // Return cached token if still valid (with 5-min buffer)
   if(dropboxAccessToken && now < dropboxTokenExpiry - 300000){
     return Promise.resolve(dropboxAccessToken);
   }
   var refreshToken = state.cfg.dropboxRefreshToken;
-  if(!refreshToken) return Promise.reject(new Error('No refresh token configured'));
+  if(!refreshToken) return Promise.reject(new Error('No refresh token configured. Please add it in Settings.'));
 
   var body = 'grant_type=refresh_token' +
              '&refresh_token=' + encodeURIComponent(refreshToken) +
              '&client_id=' + encodeURIComponent(DROPBOX_APP_KEY) +
              '&client_secret=' + encodeURIComponent(DROPBOX_APP_SECRET);
 
-  return fetch('https://api.dropbox.com/oauth2/token', {
+  // Add a 10-second timeout so it never freezes
+  var timeout = new Promise(function(_, reject){
+    setTimeout(function(){ reject(new Error('Dropbox connection timed out. Check your token in Settings.')); }, 10000);
+  });
+
+  var fetchToken = fetch('https://api.dropbox.com/oauth2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body
   }).then(function(r){ return r.json(); })
     .then(function(data){
-      if(!data.access_token) throw new Error('Token refresh failed: ' + (data.error_description || data.error || 'unknown'));
+      if(!data.access_token) throw new Error('Token refresh failed: ' + (data.error_description || data.error || 'unknown error'));
       dropboxAccessToken = data.access_token;
       dropboxTokenExpiry = Date.now() + (data.expires_in || 14400) * 1000;
       return dropboxAccessToken;
     });
+
+  return Promise.race([fetchToken, timeout]);
 }
 
 // ── Dropbox API ───────────────────────────────────────────────────────────────
