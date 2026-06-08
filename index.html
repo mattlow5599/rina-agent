@@ -982,26 +982,36 @@ function classifyEmails(emails){
 // ── Render emails ────────────────────────────────────────────────────────────
 function renderEmails(){
   var list = document.getElementById('email-list');
-  var filtered = state.emails.filter(function(e){
-    if(state.currentFilter === 'all') return e.scenario !== 'none';
+
+  var actionable = state.emails.filter(function(e){
+    if(state.currentFilter === 'all') return e.scenario && e.scenario !== 'none';
     return e.scenario === state.currentFilter;
   });
-  if(!filtered.length){
+
+  var fyi = state.currentFilter === 'all'
+    ? state.emails.filter(function(e){ return e.scenario === 'none'; })
+    : [];
+
+  if(!actionable.length && !fyi.length){
     list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--t3);font-size:12px;">No emails in this category.</div>';
     return;
   }
-  list.innerHTML = filtered.map(function(e){
-    var sc = SCENARIOS[e.scenario] || SCENARIOS.flag;
-    var unread = !e.isRead ? ' unread' : '';
+
+  function buildEmailCard(e, isFyiEmail){
+    var sc = isFyiEmail ? { label:'No action required', cls:'t-fl', border:'#8A9DB0' } : (SCENARIOS[e.scenario] || SCENARIOS.flag);
     var isFlagged = e.scenario === 'flag' ? ' flagged' : '';
-    var borderStyle = (!e.isRead) ? 'border-left:3px solid ' + sc.border + ';' : '';
-    var dot = (!e.isRead) ? '<div class="udot"></div>' : '';
+    var borderStyle = (!e.isRead && !isFyiEmail) ? 'border-left:3px solid ' + sc.border + ';' : '';
+    var dot = (!e.isRead && !isFyiEmail) ? '<div class="udot"></div>' : '';
     var tags = '<span class="tag ' + sc.cls + '">' + sc.label + '</span>';
     if(e.scenario === 'class') tags += ' <span class="tag t-hp">High priority</span>';
     var from = getFromDisplay(e);
-    var time = e.receivedDateTime ? formatTime(e.receivedDateTime) : '';
-    return '<div class="ec' + isFlagged + '" style="' + borderStyle + '">' +
-      '<div class="ei" onclick="openEmail(\'' + e.id + '\')" style="cursor:pointer;">' +
+    var time = formatTime(e.received || e.receivedDateTime);
+    var clickHandler = isFyiEmail
+      ? 'previewEmail(\'' + e.id + '\')'
+      : 'openEmail(\'' + e.id + '\')';
+    var opacity = isFyiEmail ? 'opacity:0.65;' : '';
+    return '<div class="ec' + isFlagged + '" style="' + borderStyle + opacity + '">' +
+      '<div class="ei" onclick="' + clickHandler + '" style="cursor:pointer;">' +
       '<div class="eic" style="background:' + sc.border + '18;">' +
       getScenarioIcon(e.scenario, sc.border) +
       '</div>' +
@@ -1017,7 +1027,48 @@ function renderEmails(){
       '<button onclick="dismissEmail(\'' + e.id + '\')" title="Dismiss" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:14px;padding:2px 4px;line-height:1;border-radius:4px;" onmouseover="this.style.color=\'#B91C1C\'" onmouseout="this.style.color=\'var(--t3)\'">✕</button>' +
       '</div>' +
       '</div>';
-  }).join('');
+  }
+
+  var html = '';
+
+  if(actionable.length){
+    html += actionable.map(function(e){ return buildEmailCard(e, false); }).join('');
+  } else if(state.currentFilter === 'all'){
+    html += '<div style="padding:16px 0 8px;text-align:center;color:var(--t3);font-size:12px;">No actionable emails.</div>';
+  }
+
+  if(fyi.length){
+    var fyiId = 'fyi-section';
+    html += '<div style="margin-top:12px;">' +
+      '<div onclick="toggleFyi()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 4px;border-bottom:1px solid var(--b1);margin-bottom:6px;">' +
+      '<span style="font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.07em;">FYI — No action required (' + fyi.length + ')</span>' +
+      '<span id="fyi-arrow" style="font-size:10px;color:var(--t3);margin-left:auto;">▼</span>' +
+      '</div>' +
+      '<div id="' + fyiId + '">' +
+      fyi.map(function(e){ return buildEmailCard(e, true); }).join('') +
+      '</div>' +
+      '</div>';
+  }
+
+  list.innerHTML = html;
+}
+
+function toggleFyi(){
+  var section = document.getElementById('fyi-section');
+  var arrow   = document.getElementById('fyi-arrow');
+  if(!section) return;
+  var hidden = section.style.display === 'none';
+  section.style.display = hidden ? 'block' : 'none';
+  arrow.textContent = hidden ? '▼' : '▶';
+}
+
+function previewEmail(id){
+  // For FYI emails — just mark as read, no workflow
+  var email = state.emails.find(function(e){ return e.id === id; });
+  if(email){ email.isRead = true; }
+  updateStats();
+  renderEmails();
+  showToast('FYI — no action required for this email');
 }
 
 function filterEmails(type, el){
@@ -1031,6 +1082,13 @@ function filterEmails(type, el){
 function openEmail(id){
   var email = state.emails.find(function(e){ return e.id === id; });
   if(!email) return;
+
+  // FYI emails — mark read only, no workflow
+  if(email.scenario === 'none'){
+    previewEmail(id);
+    return;
+  }
+
   email.isRead = true;
   updateStats();
   renderEmails();
@@ -1331,9 +1389,11 @@ function dismissEmail(id){
     email.scenario = 'none';
     email.isRead = true;
   }
-  // Also close any workflow for this email
+  // Close any workflow for this email
   var idx = state.workflows.findIndex(function(w){ return w.emailId === id; });
   if(idx !== -1){ state.actioned++; state.workflows.splice(idx, 1); }
+  // Dismiss associated notification
+  dismissNotifByEmailId(id);
   updateStats();
   renderEmails();
   renderWorkflows();
@@ -1761,29 +1821,65 @@ function shiftDate(base, days){
 }
 
 // ── Notifications ────────────────────────────────────────────────────────────
+function shouldNotify(email){
+  var scenario  = email.scenario;
+  var fromAddr  = getFromAddress(email).toLowerCase();
+  var isInternal = fromAddr.includes('@rina.org') || fromAddr.includes('singapore.marine');
+
+  // Always notify regardless of sender
+  if(scenario === 'class')     return true; // Class maintenance — always high priority
+  if(scenario === 'uwild')     return true; // UWILD — always notify
+  if(scenario === 'extension') return true; // Extension survey — always notify
+
+  // Notify if from external sender
+  if(!isInternal){
+    if(scenario === 'survey')  return true; // External survey request
+    if(scenario === 'plan')    return true; // External plan approval submission
+    if(scenario === 'flag')    return true; // External flagged email
+  }
+
+  // Internal RINA emails — only notify for survey requests (colleague forwarding)
+  if(isInternal && scenario === 'survey') return true;
+
+  // Everything else — inbox only, no notification
+  return false;
+}
+
 function createNotifications(classified){
   classified.forEach(function(e){
     var exists = state.notifications.find(function(n){ return n.emailId === e.id; });
     if(exists) return;
+    if(!shouldNotify(e)) return; // Skip non-priority emails
     var sc = SCENARIOS[e.scenario] || SCENARIOS.flag;
-    state.notifications.unshift({
-      id: 'n_' + Date.now() + Math.random(),
-      emailId: e.id,
+    var notif = {
+      id:       'n_' + Date.now() + Math.random(),
+      emailId:  e.id,
       scenario: e.scenario,
-      title: sc.label + (e.vessel_name ? ' — ' + e.vessel_name : ''),
-      text: getFromDisplay(e) +
-            (e.survey_date ? ' · ' + formatDate(e.survey_date) : '') +
-            '. Click to open workflow.',
-      time: formatTime(e.receivedDateTime),
-      isHigh: e.scenario === 'class',
-      dismissed: false
-    });
-    // Browser push notification
-    var n = state.notifications[0];
-    sendBrowserNotification(n.title, n.text, e.scenario);
+      title:    sc.label + (e.vessel_name ? ' — ' + e.vessel_name : ''),
+      text:     getFromDisplay(e) +
+                (e.survey_date ? ' · ' + formatDate(e.survey_date) : '') +
+                '. Click to open workflow.',
+      time:     formatTime(e.received || e.receivedDateTime),
+      isHigh:   e.scenario === 'class',
+      dismissed:false
+    };
+    state.notifications.unshift(notif);
+    sendBrowserNotification(notif.title, notif.text, e.scenario);
   });
+  updateNotifBadge();
+}
+
+function updateNotifBadge(){
   var total = state.notifications.filter(function(n){ return !n.dismissed; }).length;
   document.getElementById('badge-notifs').textContent = total;
+}
+
+function dismissNotifByEmailId(emailId){
+  state.notifications.forEach(function(n){
+    if(n.emailId === emailId) n.dismissed = true;
+  });
+  updateNotifBadge();
+  renderNotifications();
 }
 
 function renderNotifications(){
@@ -1817,7 +1913,13 @@ function hoverDismiss(btn, on){
 
 function markActioned(nid){
   var n = state.notifications.find(function(x){ return x.id === nid; });
-  if(n){ n.dismissed = true; state.actioned++; updateStats(); renderNotifications(); }
+  if(n){
+    n.dismissed = true;
+    state.actioned++;
+    updateStats();
+    updateNotifBadge();
+    renderNotifications();
+  }
 }
 
 // ── Confirm overlay ───────────────────────────────────────────────────────────
