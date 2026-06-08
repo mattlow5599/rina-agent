@@ -1595,8 +1595,8 @@ function parseCalendarEvent(title){
   // only exclude the trainees — qualified surveyors are still assignable
   // Exception: events like "David/Gilbert - Confined space training course" where
   // ALL named surveyors are attending training (no trainee involved)
-  var hasTrainees  = matched.some(function(n){ return trainees.indexOf(n) !== -1; });
-  var hasQualified = matched.some(function(n){ return trainees.indexOf(n) === -1; });
+  var hasTrainees  = matched.some(function(n){ return state.trainees.indexOf(n) !== -1; });
+  var hasQualified = matched.some(function(n){ return state.trainees.indexOf(n) === -1; });
   var adjustedExcluded = isExcluded;
   // Only override exclusion if this is a TENTATIVE event with mixed names
   // e.g. "Tentative Roderick / Jerry (Training)" — Roderick is assigned, Jerry is shadowing
