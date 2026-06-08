@@ -476,12 +476,19 @@ body.dark .draft-ph{color:#FAC775;}
               <div class="slbl" style="margin-bottom:4px;">Shared calendar name</div>
               <input type="text" id="cfg-calendar" value="RINA Singapore Marine" style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;" />
             </div>
+            <div>
+              <div class="slbl" style="margin-bottom:4px;">Blocked senders</div>
+              <div id="blocked-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;"></div>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="new-blocked-input" placeholder="Add email address to block..." style="padding:7px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;flex:1;" />
+                <button class="btn btn-n" onclick="addBlockedSender()">Block</button>
+              </div>
+            </div>
             <div style="display:flex;gap:8px;">
               <button class="btn btn-n" onclick="saveSettings()">Save settings</button>
               <button class="btn" onclick="testConnection()">Test Dropbox connection</button>
             </div>
             <div id="settings-status" style="font-size:11px;color:var(--t3);"></div>
-            <div style="padding:10px 12px;background:var(--nvl);border-radius:var(--radius-md);font-size:11px;color:var(--nvt);line-height:1.6;">
               <strong>On/Off leave toggle:</strong> Click the power button next to your name in the sidebar to pause the agent. Power Automate keeps writing emails to Dropbox, but no notifications are triggered until you resume.
             </div>
           </div>
@@ -533,6 +540,7 @@ var SCENARIOS = {
 // ── Init ────────────────────────────────────────────────────────────────────
 window.onload = function(){
   loadSettings();
+  loadBlockedSenders();
   renderSurveyors();
   updateLeaveUI();
   requestNotificationPermission();
@@ -569,6 +577,7 @@ function nav(screenId, el){
   document.getElementById('tb-title').textContent = el ? el.dataset.title : screenId;
   document.getElementById('tb-sub').textContent = el ? el.dataset.sub : '';
   if(screenId === 'surveyors') renderSurveyors();
+  if(screenId === 'settings') renderBlockedSenders();
 }
 
 // ── Live status ──────────────────────────────────────────────────────────────
@@ -840,11 +849,19 @@ function scanNow(){
     var newEmails = msgs.filter(function(m){
       return !state.emails.find(function(e){ return e.id === m.id; });
     });
-    if(newEmails.length === 0){
+    // Filter out blocked senders
+    var actionable = newEmails.filter(function(m){
+      return !isSenderBlocked(m.from);
+    });
+    // Mark blocked as seen so they don't reappear
+    newEmails.filter(function(m){ return isSenderBlocked(m.from); }).forEach(function(m){
+      state.emails.push(Object.assign({}, m, { scenario:'none', isRead:true }));
+    });
+    if(actionable.length === 0){
       renderEmails();
       return;
     }
-    classifyEmails(newEmails).then(function(classified){
+    classifyEmails(actionable).then(function(classified){
       classified.forEach(function(e){ state.emails.unshift(e); });
       renderEmails();
       updateStats();
@@ -856,7 +873,27 @@ function scanNow(){
   });
 }
 
-// ── Claude Haiku — classify ──────────────────────────────────────────────────
+// ── Sender blocklist — emails from these are silently ignored ─────────────────
+var BLOCKED_SENDERS = [
+  'leohelp@rina.org',
+  'leoeasy@rina.org',
+  'cai-ship@rina.org',
+  'rina.invoices@invoices.rina.org',
+  'marketing@inspizone.com',
+  'do-no-reply@circulars.ssa.org.sg',
+  'quarantine@messaging.microsoft.com',
+  'suspensions@rina.org',
+  'noreply@rina.org',
+  'leohelp@rina.org'
+];
+
+function isSenderBlocked(email){
+  if(!email) return false;
+  var addr = String(email).toLowerCase();
+  return BLOCKED_SENDERS.some(function(b){
+    return addr.includes(b.toLowerCase());
+  });
+}
 function classifyEmails(emails){
   var key = state.cfg.haikuKey || state.cfg.sonnetKey;
   if(!key){
@@ -956,29 +993,41 @@ function filterEmails(type, el){
 function openEmail(id){
   var email = state.emails.find(function(e){ return e.id === id; });
   if(!email) return;
-  // Mark as read locally
   email.isRead = true;
   updateStats();
   renderEmails();
-  // Create or show workflow
   var existing = state.workflows.find(function(w){ return w.emailId === id; });
   if(!existing){
+    var fromName = '';
+    if(email.from){
+      if(typeof email.from === 'string') fromName = email.from;
+      else if(email.from.emailAddress) fromName = email.from.emailAddress.name || email.from.emailAddress.address || '';
+    }
     var wf = {
-      emailId: id,
-      email: email,
-      scenario: email.scenario,
-      step: 1,
-      drafts: {},
+      emailId:    id,
+      email:      email,
+      scenario:   email.scenario || 'flag',
+      step:       1,
+      drafts:     {},
       surveyDate: email.survey_date || '',
       vesselName: email.vessel_name || '',
-      clientName: email.client_name || (email.from && email.from.emailAddress ? email.from.emailAddress.name : '')
+      clientName: email.client_name || fromName
     };
     state.workflows.push(wf);
     updateStats();
   }
-  // Navigate to workflow view
-  var wfNav = document.querySelector('.ni[data-icon="list"]');
-  nav('workflows', wfNav);
+  // Navigate to workflows screen
+  document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('on'); });
+  document.querySelectorAll('.ni').forEach(function(n){ n.classList.remove('on'); });
+  var scr = document.getElementById('screen-workflows');
+  if(scr) scr.classList.add('on');
+  // Highlight the correct nav item
+  document.querySelectorAll('.ni').forEach(function(n){
+    if(n.dataset && n.dataset.icon === 'list') n.classList.add('on');
+  });
+  document.getElementById('tb-title').textContent = 'Active workflows';
+  document.getElementById('tb-sub').textContent   = 'In-progress email workflows';
+  document.getElementById('tb-icon').setAttribute('viewBox','0 0 24 24');
   renderWorkflows();
 }
 
@@ -1274,71 +1323,54 @@ function parseCalendarEvent(title){
   var lower = raw.toLowerCase();
 
   // ── Ignore rules ────────────────────────────────────────────────────────────
-  // Fw: events (no surveyor assigned yet)
   if(lower.startsWith('fw:') || lower.startsWith('fwd:')) return null;
-  // TBA with no names
   if(lower.startsWith('tba') && !containsSurveyor(raw)) return null;
-  // Weekend duty events (Survey Duty / Office Duty) — ignored for occupancy
   if(lower.includes('survey duty') || lower.includes('office duty')) return null;
+  // Ignore meeting/operational events with no surveyor names
+  if(lower.includes('masta operational') || lower.includes('microsoft teams meeting')) return null;
+  // Ignore CII meeting type events
+  if(lower.startsWith('cii meeting')) return null;
 
   // ── Leave / exclusion rules ──────────────────────────────────────────────────
-  var isLeave     = lower.includes('annual leave') || lower.includes('on leave');
-  var isUnavail   = lower.includes('not available');
-  var isTraining  = lower.includes('training course') || lower.includes('training)') ||
-                    lower.includes('confined space') || lower.includes('course');
+  var isLeave    = lower.includes('annual leave') || lower.includes('on leave');
+  var isUnavail  = lower.includes('not available');
+  var isTraining = lower.includes('training course') || lower.includes('training)') ||
+                   lower.includes('confined space') || lower.includes('course');
 
-  var isExcluded  = isLeave || isUnavail || isTraining;
+  // Partial unavailability — flagged but not excluded
+  var isPartial  = isUnavail && /after\s*\d/.test(lower);
+  if(isPartial) isUnavail = false;
 
-  // Partial unavailability — flagged but not fully excluded
-  var isPartial   = isUnavail && /after\s*\d/.test(lower);
-  if(isPartial) isExcluded = false; // partial: show with note, not excluded
+  var isExcluded = isLeave || (isUnavail && !isPartial) || isTraining;
 
   // ── Tentative flag ───────────────────────────────────────────────────────────
   var isTentative = lower.startsWith('tentative') || lower.includes('(tentative)') ||
                     lower.includes('[awaiting job number]');
 
-  // ── Extract surveyor names from the front of the title ──────────────────────
-  // Strip leading "Tentative" if present
-  var working = raw.replace(/^tentative\s*/i, '');
+  // ── Extract surveyor names ───────────────────────────────────────────────────
+  var working = raw.replace(/^tentative\s*/i, '').trim();
 
-  // The name segment is everything before the job number pattern or a separator
-  // Job number pattern: YYYY/X#/NNN or YYYY/X#/NN/NNN
-  var jobNumPattern = /\b\d{4}\/X\d+\/[\d\/]+/;
-  var jobNumMatch   = working.match(jobNumPattern);
-  var nameSegment   = jobNumMatch ? working.substring(0, working.indexOf(jobNumMatch[0])) : working;
+  // For leave/unavailable/training: match surveyor names anywhere in first segment
+  // Split by common separators to find name segment
+  var firstSegment = working.split(/\s+2026\//)[0]  // everything before job number year
+                            .split(/\[/)[0]           // everything before square bracket
+                            .trim();
 
-  // Extract vessel name and job description after the job number
-  var vesselDesc = '';
-  if(jobNumMatch){
-    var afterJob = working.substring(working.indexOf(jobNumMatch[0]) + jobNumMatch[0].length).trim();
-    // Extract RI number if present
-    var riMatch = afterJob.match(/\(RI[:\s]*(\d+)\)/i);
-    // Remove RI number for cleaner display
-    var cleaned = afterJob.replace(/\(RI[:\s]*\d+\)/i, '').trim();
-    // Remove leading separator chars
-    cleaned = cleaned.replace(/^[-–\s]+/, '').trim();
-    vesselDesc = cleaned || afterJob;
-  } else {
-    // No job number — use everything after the name segment as description
-    vesselDesc = working;
-  }
+  // Detect weekend duty separator
+  var isWeekendDuty = firstSegment.includes('&') && !firstSegment.includes('/');
 
-  // Clean up vessel/description — truncate at 60 chars
-  if(vesselDesc.length > 70) vesselDesc = vesselDesc.substring(0, 70) + '…';
+  // Normalize separators
+  var namePart = firstSegment
+    .replace(/\s*&\s*/g, '/')
+    .replace(/\s*\/\s*/g, '/')
+    .replace(/[:\-]/g, '/');
 
-  // ── Split names by / or & ────────────────────────────────────────────────────
-  // Clean up separators in name segment
-  var namePart = nameSegment.replace(/[-:]/g, '/').replace(/&/g, '/');
-  var rawNames = namePart.split('/').map(function(n){ return n.trim(); });
-
-  // Match each token against surveyor master list
-  var separator = nameSegment.includes('&') ? '&' : '/';
-  var isWeekendDuty = separator === '&';
+  var rawTokens = namePart.split('/').map(function(n){ return n.trim(); }).filter(Boolean);
 
   var matched = [];
-  rawNames.forEach(function(token){
-    // Try to match the start of token against surveyor names
+  rawTokens.forEach(function(token){
     state.surveyors.forEach(function(sname){
+      // Match if token starts with surveyor name (case insensitive)
       if(token.toLowerCase().startsWith(sname.toLowerCase())){
         if(!matched.find(function(m){ return m === sname; })){
           matched.push(sname);
@@ -1349,18 +1381,43 @@ function parseCalendarEvent(title){
 
   if(!matched.length) return null;
 
+  // ── Extract vessel description ───────────────────────────────────────────────
+  var vesselDesc = '';
+  var jobNumPattern = /\b\d{4}\/X\d+(?:\/\d+)+/;
+  var jobNumMatch   = working.match(jobNumPattern);
+
+  if(jobNumMatch){
+    var afterJob = working.substring(working.indexOf(jobNumMatch[0]) + jobNumMatch[0].length).trim();
+    // Remove RI number
+    afterJob = afterJob.replace(/\(RI[:\s]*\d+\)/gi, '').trim();
+    // Remove leading separators
+    afterJob = afterJob.replace(/^[-–\s]+/, '').trim();
+    // Clean up vessel name — take up to the dash description separator
+    vesselDesc = afterJob || '';
+  } else if(isLeave || isUnavail || isTraining || isPartial){
+    // For leave/training events, use the event title stripped of name
+    vesselDesc = '';
+  } else {
+    // No job number — try to extract vessel from after name segment
+    var afterName = working.substring(firstSegment.length).replace(/^[-:\s]+/,'').trim();
+    vesselDesc = afterName.substring(0, 60);
+  }
+
+  // Truncate
+  if(vesselDesc.length > 70) vesselDesc = vesselDesc.substring(0, 70) + '…';
+
   return {
-    names:        matched,
-    isLeave:      isLeave,
-    isUnavail:    isUnavail && !isPartial,
-    isPartial:    isPartial,
-    isTraining:   isTraining,
-    isExcluded:   isExcluded,
-    isTentative:  isTentative,
-    isWeekendDuty:isWeekendDuty,
-    vesselDesc:   vesselDesc,
-    rawTitle:     raw,
-    jobNum:       jobNumMatch ? jobNumMatch[0] : ''
+    names:         matched,
+    isLeave:       isLeave,
+    isUnavail:     isUnavail && !isPartial,
+    isPartial:     isPartial,
+    isTraining:    isTraining,
+    isExcluded:    isExcluded,
+    isTentative:   isTentative,
+    isWeekendDuty: isWeekendDuty,
+    vesselDesc:    vesselDesc,
+    rawTitle:      raw,
+    jobNum:        jobNumMatch ? jobNumMatch[0] : ''
   };
 }
 
@@ -1406,14 +1463,14 @@ function processAvailability(events, dateVal, target, start, end){
         return; // Weekend duty doesn't block availability
       }
 
-      // Full exclusion on target day
-      if(overlapsTarget && parsed.isExcluded){
-        sm.excludedOnTarget = true;
-        if(parsed.isTraining) sm.excludeReason = 'On training course';
-        else if(parsed.isLeave) sm.excludeReason = 'On annual leave';
-        else sm.excludeReason = 'Not available';
-        return;
-      }
+    // Full exclusion on target day (leave, unavailable, training)
+    if(overlapsTarget && parsed.isExcluded){
+      sm.excludedOnTarget = true;
+      if(parsed.isTraining)      sm.excludeReason = 'On training course';
+      else if(parsed.isLeave)    sm.excludeReason = 'On annual leave';
+      else                       sm.excludeReason = 'Not available';
+      return;
+    }
 
       // Partial unavailability — show with note
       if(overlapsTarget && parsed.isPartial){
@@ -1422,14 +1479,16 @@ function processAvailability(events, dateVal, target, start, end){
 
       // Add as a job entry (in window, for ±3 day calculation)
       sm.jobs.push({
-        start:        evStart,
-        end:          evEnd,
+        start:          evStart,
+        end:            evEnd,
         overlapsTarget: overlapsTarget,
-        isMultiDay:   isMultiDay,
-        isTentative:  parsed.isTentative,
-        isExcluded:   parsed.isExcluded,
-        vesselDesc:   parsed.vesselDesc,
-        rawTitle:     parsed.rawTitle
+        isMultiDay:     isMultiDay,
+        isTentative:    parsed.isTentative,
+        isExcluded:     parsed.isExcluded,
+        isTraining:     parsed.isTraining,
+        isLeave:        parsed.isLeave,
+        vesselDesc:     parsed.vesselDesc,
+        rawTitle:       parsed.rawTitle
       });
     });
   });
@@ -1466,7 +1525,7 @@ function processAvailability(events, dateVal, target, start, end){
       return !j.overlapsTarget && j.start.getTime() > targetMs && (j.start.getTime() - targetMs) <= 3*86400000;
     });
     var leaveInWindow = sm.jobs.filter(function(j){
-      return j.isExcluded && !j.overlapsTarget;
+      return (j.isExcluded || j.isTraining) && !j.overlapsTarget;
     });
 
     var entry = {
@@ -1518,7 +1577,10 @@ function processAvailability(events, dateVal, target, start, end){
         lines.push('Fully clear');
       }
       if(s.leaveInWindow && s.leaveInWindow.length){
-        lines.push('<span style="color:#B91C1C;font-size:10px;">⚠ On leave/unavailable within ±3 day window</span>');
+        var leaveLabel = s.leaveInWindow.some(function(j){ return j.isTraining; })
+          ? '<span style="color:#B91C1C;font-size:10px;">⚠ On training course within ±3 day window</span>'
+          : '<span style="color:#B91C1C;font-size:10px;">⚠ On leave/unavailable within ±3 day window</span>';
+        lines.push(leaveLabel);
       }
       if(s.partialNote){
         lines.push('<span style="color:#EF9F27;font-size:10px;">⚠ ' + escHtml(s.partialNote) + '</span>');
@@ -1696,7 +1758,43 @@ function updateStats(){
   document.getElementById('badge-notifs').textContent  = flags;
 }
 
-// ── Surveyor list ─────────────────────────────────────────────────────────────
+// ── Blocked sender management ─────────────────────────────────────────────────
+function renderBlockedSenders(){
+  var container = document.getElementById('blocked-list');
+  if(!container) return;
+  container.innerHTML = BLOCKED_SENDERS.map(function(addr, i){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--b1);border-radius:var(--radius-md);background:var(--bg1);">' +
+      '<span style="font-size:11px;color:var(--t2);">' + escHtml(addr) + '</span>' +
+      '<button onclick="removeBlockedSender(' + i + ')" style="font-size:10px;color:var(--t3);background:none;border:none;cursor:pointer;padding:2px 6px;">Remove</button>' +
+      '</div>';
+  }).join('');
+}
+
+function addBlockedSender(){
+  var input = document.getElementById('new-blocked-input');
+  var addr = input.value.trim().toLowerCase();
+  if(addr && !BLOCKED_SENDERS.includes(addr)){
+    BLOCKED_SENDERS.push(addr);
+    input.value = '';
+    saveBlockedSenders();
+    renderBlockedSenders();
+  }
+}
+
+function removeBlockedSender(i){
+  BLOCKED_SENDERS.splice(i, 1);
+  saveBlockedSenders();
+  renderBlockedSenders();
+}
+
+function saveBlockedSenders(){
+  localStorage.setItem('rina_blocked', JSON.stringify(BLOCKED_SENDERS));
+}
+
+function loadBlockedSenders(){
+  var saved = localStorage.getItem('rina_blocked');
+  if(saved){ try{ var arr = JSON.parse(saved); arr.forEach(function(a){ if(!BLOCKED_SENDERS.includes(a)) BLOCKED_SENDERS.push(a); }); } catch(e){} }
+}
 function renderSurveyors(){
   var container = document.getElementById('surveyor-list-container');
   container.innerHTML = state.surveyors.map(function(name, i){
