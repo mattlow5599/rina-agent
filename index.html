@@ -932,11 +932,9 @@ function classifyEmails(emails){
       'From: ' + (msg.from || '') + '\n' +
       'Preview: ' + (msg.body || msg.bodyPreview || '');
 
-    return fetch('https://api.anthropic.com/v1/messages', {
+    return fetch('https://rinaworker.matt-low5599.workers.dev', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+      headers:{ 'Content-Type':'application/json', 'x-api-key': state.cfg.sonnetKey||state.cfg.haikuKey||'', 'anthropic-version':'2023-06-01' },
         max_tokens: 200,
         messages:[{ role:'user', content: prompt }]
       })
@@ -1171,9 +1169,9 @@ function generateDraft(wf, idx, step){
   renderWorkflows();
 
   var prompt = buildDraftPrompt(wf, step.draftKey);
-  fetch('https://api.anthropic.com/v1/messages', {
+  fetch('https://rinaworker.matt-low5599.workers.dev', {
     method:'POST',
-    headers:{ 'Content-Type':'application/json' },
+    headers:{ 'Content-Type':'application/json', 'x-api-key': state.cfg.sonnetKey||state.cfg.haikuKey||'', 'anthropic-version':'2023-06-01' },
     body: JSON.stringify({
       model:'claude-sonnet-4-6',
       max_tokens:800,
@@ -1247,9 +1245,9 @@ function refineDraft(wfIdx, stepIdx){
   if(!key){ alert('Add a Sonnet API key in Settings to use this feature.'); return; }
   wf.drafts[step.draftKey] = 'loading';
   renderWorkflows();
-  fetch('https://api.anthropic.com/v1/messages', {
+  fetch('https://rinaworker.matt-low5599.workers.dev', {
     method:'POST',
-    headers:{ 'Content-Type':'application/json' },
+    headers:{ 'Content-Type':'application/json', 'x-api-key': state.cfg.sonnetKey||state.cfg.haikuKey||'', 'anthropic-version':'2023-06-01' },
     body: JSON.stringify({
       model:'claude-sonnet-4-6',
       max_tokens:800,
