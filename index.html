@@ -1839,102 +1839,114 @@ function processAvailability(events, dateVal, target, start, end){
 function suggestSurveyors(dateVal){
   var panel = document.getElementById('suggest-panel');
   if(!panel) return;
-
-  // Toggle off
-  if(panel.style.display === 'block'){
-    panel.style.display = 'none';
-    return;
-  }
-
-  panel.style.display = 'block';
-  panel.innerHTML = '<div class="ai-loading"><div class="spinner"></div> Claude is analysing surveyor workload...</div>';
-
-  var key = state.cfg.sonnetKey || state.cfg.haikuKey;
-  if(!key){
-    panel.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--t3);">Add an Anthropic API key in Settings to use this feature.</div>';
-    return;
-  }
+  if(panel.style.display === 'block'){ panel.style.display = 'none'; return; }
 
   var av = state.lastAvailability;
-  if(!av){
-    panel.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--t3);">No availability data. Click Check calendar first.</div>';
-    return;
+  if(!av){ panel.style.display = 'none'; return; }
+
+  var tMs = new Date(dateVal + 'T00:00:00Z').getTime();
+
+  // Build pool: green + yellow + red (not purple, not excluded)
+  var pool = [];
+  function addToPool(list){
+    (list||[]).forEach(function(s){
+      var activeJobs = (s.jobs||[]).filter(function(j){ return !j.isExcluded; });
+      // Find nearest job on EITHER side
+      var nearestDist = activeJobs.length
+        ? Math.min.apply(null, activeJobs.map(function(j){
+            return Math.abs(j.startMs - tMs) / 86400000;
+          }))
+        : 999;
+      // Find last job before and first job after separately
+      var beforeJobs = activeJobs.filter(function(j){ return j.startMs < tMs; })
+                                 .sort(function(a,b){ return b.startMs - a.startMs; });
+      var afterJobs  = activeJobs.filter(function(j){ return j.startMs >= tMs; })
+                                 .sort(function(a,b){ return a.startMs - b.startMs; });
+      var lastBeforeDist = beforeJobs.length
+        ? Math.abs(beforeJobs[0].startMs - tMs) / 86400000 : 999;
+      var firstAfterDist = afterJobs.length
+        ? Math.abs(afterJobs[0].startMs - tMs) / 86400000 : 999;
+
+      pool.push({
+        s:              s,
+        nearestDist:    nearestDist,
+        lastBeforeDist: lastBeforeDist,
+        firstAfterDist: firstAfterDist,
+        beforeJobs:     beforeJobs,
+        afterJobs:      afterJobs
+      });
+    });
   }
 
-  // Build a structured summary of all available surveyors and their jobs
-  function describeSurveyor(entry, tier){
-    var lines = [tier + ': ' + entry.name];
-    if(entry.jobs && entry.jobs.length){
-      entry.jobs.forEach(function(j){
-        var tDay = new Date(dateVal + 'T00:00:00Z');
-        var when = j.startMs < tDay.getTime() ? 'Before' : 'After';
-        var diff = Math.round(Math.abs(j.startMs - tDay.getTime()) / 86400000);
-        if(diff === 0) diff = 1;
-        var dateStr = j.start.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
-        var desc = (j.vesselDesc || j.rawTitle || '').substring(0, 80);
-        lines.push('  ' + when + ' (' + diff + ' day' + (diff!==1?'s':'') + ', ' + dateStr + '): ' + desc + (j.isTentative?' [Tentative]':''));
+  addToPool(av.weekendPriority);
+  addToPool(av.green);
+  addToPool(av.yellow);
+  addToPool(av.red);
+
+  // Sort purely by nearestDist descending — furthest nearest job = best choice
+  // Ties broken by firstAfterDist descending
+  pool.sort(function(a, b){
+    if(b.nearestDist !== a.nearestDist) return b.nearestDist - a.nearestDist;
+    return b.firstAfterDist - a.firstAfterDist;
+  });
+
+  var top3 = pool.slice(0, 3);
+  if(!top3.length){ panel.style.display = 'none'; return; }
+
+  var badgeColors = ['#2D6A4F','#EF9F27','#B45309'];
+
+  var html = '<div style="margin-top:4px;">' +
+    '<div style="font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.07em;padding:4px 0 8px;">Top 3 — most schedule clearance around target date</div>';
+
+  top3.forEach(function(c, i){
+    function fmtJob(j){
+      var diff = Math.round(Math.abs(j.startMs - tMs) / 86400000) || 1;
+      var ds   = j.start.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+      var desc = escHtml((j.vesselDesc || j.rawTitle || '').substring(0, 55));
+      var tent = j.isTentative ? ' <span style="color:#EF9F27;">[T]</span>' : '';
+      var side = j.startMs < tMs ? '-' : '+';
+      return side + diff + 'd (' + ds + ') — ' + desc + tent;
+    }
+
+    var clearanceNote = c.nearestDist >= 999
+      ? '<span style="color:#2D6A4F;font-size:10px;font-weight:600;">Fully clear</span>'
+      : '<span style="color:var(--t3);font-size:10px;">Nearest job ' + Math.round(c.nearestDist) + 'd away</span>';
+
+    var lines = '';
+    // Last job before
+    if(c.beforeJobs.length){
+      lines += '<div style="font-size:11px;color:var(--t2);margin-top:4px;">' +
+        '<span style="color:var(--t3);min-width:80px;display:inline-block;">Last before:</span>' +
+        fmtJob(c.beforeJobs[0]) + '</div>';
+    } else {
+      lines += '<div style="font-size:11px;color:var(--t3);margin-top:4px;">Last before: No jobs in window</div>';
+    }
+    // All jobs after
+    if(c.afterJobs.length){
+      c.afterJobs.forEach(function(j){
+        lines += '<div style="font-size:11px;color:var(--t2);">' +
+          '<span style="color:var(--t3);min-width:80px;display:inline-block;">Next after: </span>' +
+          fmtJob(j) + '</div>';
       });
     } else {
-      lines.push('  No jobs in ±3 day window — fully clear');
+      lines += '<div style="font-size:11px;color:var(--t3);">Next after:  No jobs in window</div>';
     }
-    if(entry.leaveInWindow && entry.leaveInWindow.length){
-      lines.push('  Note: Has leave/training within ±3 day window');
-    }
-    return lines.join('\n');
-  }
 
-  var surveyorData = [];
-  (av.weekendPriority||[]).forEach(function(e){ surveyorData.push(describeSurveyor(e,'Weekend duty priority')); });
-  (av.green||[]).forEach(function(e){ surveyorData.push(describeSurveyor(e,'Green — fully clear')); });
-  (av.yellow||[]).forEach(function(e){ surveyorData.push(describeSurveyor(e,'Yellow — job on one side')); });
-  (av.red||[]).forEach(function(e){ surveyorData.push(describeSurveyor(e,'Red — jobs on both sides')); });
-
-  if(!surveyorData.length){
-    panel.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--t3);">No available surveyors to suggest from.</div>';
-    return;
-  }
-
-  var prompt = 'You are a marine survey coordinator at RINA Singapore. Based on the following surveyor availability data for ' + dateVal + ', recommend the TOP 3 best surveyors to assign to a job on this date.\n\n' +
-    'AVAILABILITY DATA:\n' + surveyorData.join('\n\n') + '\n\n' +
-    'For each of your top 3 recommendations, provide:\n' +
-    '1. Surveyor name and your recommendation rank\n' +
-    '2. Why you recommend them (workload, proximity of surrounding jobs)\n' +
-    '3. Last job before the target date: job description and date (if any)\n' +
-    '4. Next job after the target date: vessel name, job description and date (if any)\n' +
-    '5. Any considerations or caveats\n\n' +
-    'Be concise and practical. Format as plain text with clear sections for each surveyor. No markdown symbols or bullet points.';
-
-  fetch('https://rinaworker.matt-low5599.workers.dev', {
-    method: 'POST',
-    headers:{
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 800,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  }).then(function(r){ return r.json(); })
-    .then(function(data){
-      var text = (data.content && data.content[0] && data.content[0].text) || 'Unable to generate suggestion.';
-      // Format the response — highlight surveyor names and section headers
-      var formatted = escHtml(text)
-        .replace(/\n\n/g, '</p><p style="margin-top:10px;">')
-        .replace(/\n/g, '<br>');
-      panel.innerHTML =
-        '<div style="border:1px solid var(--nvm);border-radius:var(--radius-md);overflow:hidden;">' +
-        '<div style="background:var(--nvl);padding:8px 12px;display:flex;align-items:center;gap:8px;">' +
-        '<span style="font-size:11px;font-weight:600;color:var(--nvt);">✦ Top 3 surveyor recommendations for ' + dateVal + '</span>' +
-        '<button onclick="document.getElementById(\'suggest-panel\').style.display=\'none\'" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--t3);font-size:13px;">✕</button>' +
+    html += '<div style="display:flex;gap:8px;padding:8px 10px;border-radius:var(--radius-md);border:1px solid var(--b1);background:var(--bg1);margin-bottom:5px;">' +
+      '<div style="width:22px;height:22px;border-radius:50%;background:' + badgeColors[i] + ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:2px;">' + (i+1) + '</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+          '<span style="font-size:13px;font-weight:600;color:var(--t1);">' + escHtml(c.s.name) + '</span>' +
+          clearanceNote +
         '</div>' +
-        '<div style="padding:12px 14px;font-size:12px;color:var(--t2);line-height:1.75;background:var(--bg1);">' +
-        '<p>' + formatted + '</p>' +
-        '</div></div>';
-    }).catch(function(){
-      panel.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--t3);">Failed to generate suggestion. Check your API key.</div>';
-    });
+        lines +
+      '</div>' +
+      '</div>';
+  });
+
+  html += '</div>';
+  panel.innerHTML = html;
+  panel.style.display = 'block';
 }
 
 function containsSurveyor(title){
