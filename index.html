@@ -862,7 +862,6 @@ function parseEventDate(val){
 function fetchCalendarEvents(startDate, endDate){
   return dropboxRead('calendar.json').then(function(events){
     console.log('calendar.json events count:', (events||[]).length);
-    if(events && events.length > 0) console.log('Sample event:', JSON.stringify(events[0]));
     return { value: events || [] };
   });
 }
@@ -1676,6 +1675,10 @@ function processAvailability(events, dateVal, target, start, end){
     var evStartMs = evStart.getTime();
     var evEndMs   = evEnd.getTime();
     var overlapsTarget = isSameDateOrOverlaps(evStartMs, evEndMs, dateVal);
+    // Debug leave/training events
+    if(parsed.isLeave || parsed.isTraining){
+      console.log('LEAVE/TRAIN:', ev.subject.substring(0,50), '| overlaps '+dateVal+':', overlapsTarget, '| start:', evStart.toISOString().split('T')[0], '| end:', evEnd.toISOString().split('T')[0]);
+    }
     // Multi-day: event spans more than one calendar day in UTC
     var evStartUTCDate = evStart.toISOString().split('T')[0];
     var evEndAdj = new Date(evEndMs - 1); // subtract 1ms to handle midnight-end
