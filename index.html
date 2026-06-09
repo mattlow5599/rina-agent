@@ -493,8 +493,13 @@ body.dark .draft-ph{color:#FAC775;}
               <strong>On/Off leave toggle:</strong> Click the power button next to your name in the sidebar to pause the agent. Power Automate keeps writing emails to Dropbox, but no notifications are triggered until you resume.
             </div>
             <div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                <div class="slbl">Suppressed subjects</div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <div class="slbl">Email monitoring start time</div>
+                <button onclick="resetStartTimestamp()" style="font-size:10px;color:var(--nv);background:none;border:1px solid var(--nv);border-radius:4px;cursor:pointer;padding:2px 8px;margin-left:auto;">Reset to now</button>
+              </div>
+              <div id="start-ts-display" style="font-size:11px;color:var(--t3);padding:6px 10px;border:1px solid var(--b1);border-radius:var(--radius-md);background:var(--bg1);"></div>
+              <div style="font-size:10px;color:var(--t3);margin-top:4px;">Emails received before this time are ignored. Click "Reset to now" to start fresh.</div>
+            </div>
                 <button onclick="clearSuppressedSubjects()" style="font-size:10px;color:#B91C1C;background:none;border:1px solid #B91C1C;border-radius:4px;cursor:pointer;padding:2px 8px;margin-left:auto;">Clear all</button>
               </div>
               <div id="suppressed-list" style="font-size:11px;color:var(--t3);max-height:120px;overflow-y:auto;border:1px solid var(--b1);border-radius:var(--radius-md);padding:6px 10px;background:var(--bg1);"></div>
@@ -595,7 +600,7 @@ function nav(screenId, el){
   document.getElementById('tb-title').textContent = el ? el.dataset.title : screenId;
   document.getElementById('tb-sub').textContent = el ? el.dataset.sub : '';
   if(screenId === 'surveyors') renderSurveyors();
-  if(screenId === 'settings'){ renderBlockedSenders(); renderSuppressedSubjects(); }
+  if(screenId === 'settings'){ renderBlockedSenders(); renderSuppressedSubjects(); renderStartTimestamp(); }
 }
 
 // ── Live status ──────────────────────────────────────────────────────────────
@@ -872,9 +877,27 @@ function parseEventDate(val){
 
 function fetchCalendarEvents(startDate, endDate){
   return dropboxRead('calendar.json').then(function(events){
-    console.log('calendar.json events count:', (events||[]).length);
     return { value: events || [] };
   });
+}
+
+// ── Start timestamp — only process emails received after this point ────────────
+function getStartTimestamp(){
+  var ts = localStorage.getItem('rina_start_ts');
+  if(!ts){
+    // First run — record now, ignore all existing emails
+    ts = new Date().toISOString();
+    localStorage.setItem('rina_start_ts', ts);
+  }
+  return new Date(ts).getTime();
+}
+
+function isEmailTooOld(email){
+  var received = email.received || email.receivedDateTime || '';
+  if(!received) return false; // no timestamp — let it through
+  var ts = new Date(received).getTime();
+  if(isNaN(ts)) return false;
+  return ts < getStartTimestamp();
 }
 
 // ── Scan ─────────────────────────────────────────────────────────────────────
@@ -893,6 +916,14 @@ function scanNow(){
     msgs = msgs || [];
     var newEmails = msgs.filter(function(m){
       return !state.emails.find(function(e){ return e.id === m.id; });
+    });
+    // Filter emails received before the app start timestamp
+    newEmails = newEmails.filter(function(m){
+      if(isEmailTooOld(m)){
+        state.emails.push(Object.assign({},m,{scenario:'none',isRead:true}));
+        return false;
+      }
+      return true;
     });
     // Filter out blocked senders
     var actionable = newEmails.filter(function(m){ return !isSenderBlocked(m); });
@@ -1082,6 +1113,28 @@ function toggleFyi(){
   var hidden = section.style.display === 'none';
   section.style.display = hidden ? 'block' : 'none';
   arrow.textContent = hidden ? '▼' : '▶';
+}
+
+function resetStartTimestamp(){
+  var ts = new Date().toISOString();
+  localStorage.setItem('rina_start_ts', ts);
+  renderStartTimestamp();
+  // Clear existing emails so they reload from the new cutoff
+  state.emails = [];
+  state.notifications = [];
+  state.workflows = [];
+  updateStats();
+  renderEmails();
+  showToast('Start time reset. Old emails cleared.');
+}
+
+function renderStartTimestamp(){
+  var el = document.getElementById('start-ts-display');
+  if(!el) return;
+  var ts = localStorage.getItem('rina_start_ts');
+  if(!ts){ ts = new Date().toISOString(); localStorage.setItem('rina_start_ts', ts); }
+  var d = new Date(ts);
+  el.textContent = 'Monitoring from: ' + d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ' ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) + ' (Singapore time)';
 }
 
 function clearSuppressedSubjects(){
