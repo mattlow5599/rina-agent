@@ -303,9 +303,29 @@ body.dark .draft-ph{color:#FAC775;}
         <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         Active workflows <span class="nb nbw" id="badge-wf">0</span>
       </div>
+      <div class="ni" onclick="nav('completed',this)" data-icon="check" data-title="Completed" data-sub="Completed and assigned workflows">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Completed
+      </div>
       <div class="ni" onclick="nav('avail',this)" data-icon="calendar" data-title="Surveyor availability" data-sub="Check calendar and assign surveyors">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Surveyor availability
+      </div>
+      <div class="ni" onclick="nav('calview',this)" data-icon="grid" data-title="Calendar view" data-sub="Surveyor schedule ±5 days">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Calendar view
+      </div>
+    </div>
+
+    <div class="ng">
+      <div class="ngl">Tools</div>
+      <div class="ni" onclick="nav('reminders',this)" data-icon="clock" data-title="Reminders" data-sub="Notes and scheduled reminders">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Reminders <span class="nb nbw" id="badge-reminders">0</span>
+      </div>
+      <div class="ni" onclick="nav('templates',this)" data-icon="file" data-title="Email templates" data-sub="Scenario-specific reply templates">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Templates
       </div>
     </div>
 
@@ -523,8 +543,140 @@ body.dark .draft-ph{color:#FAC775;}
       </div>
     </div>
 
+      <!-- COMPLETED -->
+      <div class="screen" id="screen-completed">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="slbl">Completed workflows</div>
+          <button onclick="clearCompleted()" style="font-size:10px;color:var(--t3);background:none;border:1px solid var(--b2);border-radius:4px;cursor:pointer;padding:2px 8px;">Clear all</button>
+        </div>
+        <div id="completed-list"></div>
+      </div>
+
+      <!-- REMINDERS -->
+      <div class="screen" id="screen-reminders">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="slbl">Reminders</div>
+          <button class="btn btn-n" onclick="showAddReminder()">+ Add reminder</button>
+        </div>
+        <div id="reminders-list"></div>
+        <!-- Add/edit reminder form -->
+        <div id="reminder-form" style="display:none;border:1px solid var(--b2);border-radius:var(--radius-md);padding:14px;background:var(--bg1);margin-top:12px;">
+          <div class="slbl" style="margin-bottom:10px;" id="reminder-form-title">New reminder</div>
+          <input type="hidden" id="reminder-edit-id" value="" />
+          <div style="margin-bottom:8px;">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px;">Note</div>
+            <textarea id="reminder-note" rows="3" placeholder="Enter your reminder note..." style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg2);color:var(--t1);font-family:inherit;font-size:12px;resize:vertical;"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <div style="flex:1;">
+              <div style="font-size:11px;color:var(--t3);margin-bottom:4px;">Date</div>
+              <input type="date" id="reminder-date" style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg2);color:var(--t1);font-family:inherit;font-size:12px;" />
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:11px;color:var(--t3);margin-bottom:4px;">Time</div>
+              <input type="time" id="reminder-time" value="09:00" style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg2);color:var(--t1);font-family:inherit;font-size:12px;" />
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-n" onclick="saveReminder()">Save reminder</button>
+            <button class="btn" onclick="document.getElementById('reminder-form').style.display='none'">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CALENDAR VIEW -->
+      <div class="screen" id="screen-calview">
+        <div style="margin-bottom:12px;">
+          <div class="slbl" style="margin-bottom:8px;">Surveyor schedule</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="font-size:11px;color:var(--t3);">Centre date:</div>
+            <input type="date" id="calview-date" style="padding:6px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;" />
+            <button class="btn btn-n" onclick="renderCalView()">View</button>
+          </div>
+        </div>
+        <div id="calview-content" style="overflow-x:auto;"></div>
+      </div>
+
+      <!-- TEMPLATES -->
+      <div class="screen" id="screen-templates">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="slbl">Email templates</div>
+          <button class="btn btn-n" onclick="showAddTemplate()">+ Add template</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;" id="template-scenario-tabs">
+          <button class="chip on" onclick="filterTemplates('all',this)">All</button>
+          <button class="chip" onclick="filterTemplates('survey',this)">Survey</button>
+          <button class="chip" onclick="filterTemplates('plan',this)">Plan approval</button>
+          <button class="chip" onclick="filterTemplates('uwild',this)">UWILD</button>
+          <button class="chip" onclick="filterTemplates('extension',this)">Extension</button>
+          <button class="chip" onclick="filterTemplates('flag',this)">Flagged</button>
+        </div>
+        <div id="templates-list"></div>
+        <!-- Add/edit template form -->
+        <div id="template-form" style="display:none;border:1px solid var(--b2);border-radius:var(--radius-md);padding:14px;background:var(--bg1);margin-top:12px;">
+          <div class="slbl" style="margin-bottom:10px;" id="template-form-title">New template</div>
+          <input type="hidden" id="template-edit-id" value="" />
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <div style="flex:1;">
+              <div style="font-size:11px;color:var(--t3);margin-bottom:4px;">Template name</div>
+              <input type="text" id="template-name" placeholder="e.g. Survey acknowledgement" style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg2);color:var(--t1);font-family:inherit;font-size:12px;" />
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:11px;color:var(--t3);margin-bottom:4px;">Scenario</div>
+              <select id="template-scenario" style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg2);color:var(--t1);font-family:inherit;font-size:12px;">
+                <option value="all">All scenarios</option>
+                <option value="survey">Survey request</option>
+                <option value="plan">Plan approval</option>
+                <option value="uwild">UWILD</option>
+                <option value="extension">Extension survey</option>
+                <option value="flag">Flagged / attention</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-bottom:10px;">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px;">Template body</div>
+            <textarea id="template-body" rows="6" placeholder="Enter your template text. Use {vessel}, {date}, {client} as placeholders." style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg2);color:var(--t1);font-family:inherit;font-size:12px;resize:vertical;"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-n" onclick="saveTemplate()">Save template</button>
+            <button class="btn" onclick="document.getElementById('template-form').style.display='none'">Cancel</button>
+          </div>
+        </div>
+      </div>
+
   </div><!-- /main -->
 </div><!-- /app -->
+
+<!-- Reminder popup overlay -->
+<div id="reminder-popup" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--cbg);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--bg1);border-radius:var(--radius-lg);padding:24px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:#EF9F27;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span style="font-size:14px;font-weight:600;color:var(--t1);">Reminder</span>
+    </div>
+    <div id="reminder-popup-text" style="font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:16px;white-space:pre-wrap;"></div>
+    <div id="reminder-popup-time" style="font-size:11px;color:var(--t3);margin-bottom:16px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-n" onclick="dismissReminderPopup()">Dismiss</button>
+      <button class="btn" onclick="snoozeReminder()">Snooze 1 hour</button>
+    </div>
+  </div>
+</div>
+
+<!-- Daily briefing overlay -->
+<div id="daily-briefing" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--cbg);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:var(--bg1);border-radius:var(--radius-lg);padding:24px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <div style="font-size:16px;font-weight:600;color:var(--t1);">Good morning ☀️</div>
+        <div id="briefing-date" style="font-size:12px;color:var(--t3);margin-top:2px;"></div>
+      </div>
+      <button onclick="closeDailyBriefing()" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:18px;padding:4px;">✕</button>
+    </div>
+    <div id="briefing-content" style="font-size:13px;color:var(--t2);line-height:1.8;"></div>
+    <button class="btn btn-n" onclick="closeDailyBriefing()" style="margin-top:16px;width:100%;">Start the day</button>
+  </div>
+</div>
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
@@ -534,14 +686,19 @@ var state = {
   emails: [],
   notifications: [],
   workflows: [],
+  completed: [],
+  reminders: [],
+  templates: [],
   actioned: 0,
   surveyors: ['Roderick','Gilbert','Jiahui','Zani','Chris','Choy','Sufian','Jiang','Haibo','David','Rawat','Glenn','Lixiang','Nicholas','Faris','Ibrahim','Mahadir','Jerry'],
   trainees: ['Jerry','Mahadir'],
   suppressedSubjects: [],
+  templateFilter: 'all',
   cfg: { sonnetKey:'', haikuKey:'', dropboxRefreshToken:'', mailbox:'singapore.marine@rina.org', calendar:'RINA Singapore Marine' },
   currentFilter: 'all',
   pollInterval: null,
-  lastAvailability: null
+  lastAvailability: null,
+  currentReminderId: null
 };
 
 // Scenario config
@@ -560,9 +717,16 @@ window.onload = function(){
   try { loadBlockedSenders(); } catch(e){}
   try { loadTrainees(); } catch(e){}
   try { loadSuppressedSubjects(); } catch(e){}
+  try { loadCompleted(); } catch(e){}
+  try { loadReminders(); } catch(e){}
+  try { loadTemplates(); } catch(e){}
   try { renderSurveyors(); } catch(e){}
   try { updateLeaveUI(); } catch(e){}
   try { requestNotificationPermission(); } catch(e){}
+  try { patchDropboxRead(); } catch(e){}
+  try { updateReminderBadge(); } catch(e){}
+  // Check reminders every minute
+  setInterval(function(){ try{checkReminders();updateReminderBadge();updateOfflineIndicator();}catch(e){} }, 60000);
   var today = new Date().toISOString().split('T')[0];
   var di = document.getElementById('avail-date-input');
   if(di) di.value = today;
@@ -576,6 +740,8 @@ window.onload = function(){
     } else {
       setLiveStatus(false, 'Configure Dropbox token in Settings');
     }
+    try{ checkReminders(); }catch(e){}
+    try{ checkDailyBriefing(); }catch(e){}
   }, 500);
 };
 
@@ -601,6 +767,10 @@ function nav(screenId, el){
   document.getElementById('tb-sub').textContent = el ? el.dataset.sub : '';
   if(screenId === 'surveyors') renderSurveyors();
   if(screenId === 'settings'){ renderBlockedSenders(); renderSuppressedSubjects(); renderStartTimestamp(); }
+  if(screenId === 'completed') renderCompleted();
+  if(screenId === 'reminders'){ renderReminders(); updateReminderBadge(); }
+  if(screenId === 'templates') renderTemplates();
+  if(screenId === 'calview'){ var t=new Date().toISOString().split('T')[0]; document.getElementById('calview-date').value=t; }
 }
 
 // ── Live status ──────────────────────────────────────────────────────────────
@@ -1034,6 +1204,7 @@ function renderEmails(){
   var list = document.getElementById('email-list');
 
   var actionable = state.emails.filter(function(e){
+    if(e.scenario === 'active') return false; // in workflow — not shown in inbox
     if(state.currentFilter === 'all') return e.scenario && e.scenario !== 'none';
     return e.scenario === state.currentFilter;
   });
@@ -1261,20 +1432,23 @@ function openEmail(id){
   }
 
   email.isRead = true;
+  email.scenario = 'active'; // mark as in-workflow so it leaves inbox
   updateStats();
   renderEmails();
+  dismissNotifByEmailId(id);
   var existing = state.workflows.find(function(w){ return w.emailId === id; });
   if(!existing){
     var fromName = getFromDisplay(email);
     var wf = {
-      emailId:    id,
-      email:      email,
-      scenario:   email.scenario || 'flag',
-      step:       1,
-      drafts:     {},
-      surveyDate: email.survey_date || '',
-      vesselName: email.vessel_name || '',
-      clientName: email.client_name || fromName
+      emailId:          id,
+      email:            email,
+      scenario:         email.scenario || 'flag',
+      originalScenario: email.scenario || 'flag',
+      step:             1,
+      drafts:           {},
+      surveyDate:       email.survey_date || '',
+      vesselName:       email.vessel_name || '',
+      clientName:       email.client_name || fromName
     };
     state.workflows.push(wf);
     updateStats();
@@ -1346,7 +1520,7 @@ function renderWorkflow(wf, idx){
           '<button class="btn btn-ol" onclick="refineDraft(\'' + wf.emailId + '\',' + (wf.step-1) + ')">✦ Refine with Claude ↗</button>' +
           '<button class="btn" onclick="copyDraft(\'' + wf.emailId + '\')">Copy draft</button>' +
           (wf.scenario === 'survey' || wf.scenario === 'uwild' || wf.scenario === 'extension' ? '<button class="btn btn-n" onclick="goToAvailability(\'' + (wf.surveyDate||'') + '\')">Check availability</button>' : '') +
-          (wf.step < steps.length ? '<button class="btn btn-n" onclick="advanceStep(\'' + wf.emailId + '\')">Next step →</button>' : '<button class="btn btn-n" onclick="closeWorkflow(\'' + wf.emailId + '\')">Complete workflow</button>') +
+          (wf.step < steps.length ? '<button class="btn btn-n" onclick="advanceStep(\'' + wf.emailId + '\')">Next step →</button>' : '<button class="btn btn-n" onclick="completeWorkflow(\'' + wf.emailId + '\')">✓ Complete</button>') +
           '<button class="btn" onclick="closeWorkflow(\'' + wf.emailId + '\')">Close</button>' +
           '</div>';
       }
@@ -1355,7 +1529,7 @@ function renderWorkflow(wf, idx){
       actionHtml = '<div style="padding:12px;background:var(--nvl);border-radius:var(--radius-md);font-size:12px;color:var(--nvt);margin-bottom:10px;">' + (currentStep.manualNote||'Complete this step manually, then advance.') + '</div>' +
         '<div class="arow">' +
         (wf.scenario === 'survey' || wf.scenario === 'uwild' ? '<button class="btn btn-n" onclick="goToAvailability(\'' + (wf.surveyDate||'') + '\')">Check availability</button>' : '') +
-        '<button class="btn btn-n" onclick="advanceStep(\'' + wf.emailId + '\')">Mark done → Next step</button>' +
+        (wf.step < steps.length ? '<button class="btn btn-n" onclick="advanceStep(\'' + wf.emailId + '\')">Mark done → Next step</button>' : '<button class="btn btn-n" onclick="completeWorkflow(\'' + wf.emailId + '\')">✓ Complete</button>') +
         '<button class="btn" onclick="closeWorkflow(\'' + wf.emailId + '\')">Close</button>' +
         '</div>';
     }
@@ -1548,10 +1722,69 @@ function advanceStep(emailId){
 function closeWorkflow(emailId){
   var idx = state.workflows.findIndex(function(w){ return w.emailId === emailId; });
   if(idx === -1) return;
-  state.actioned++;
+  var wf = state.workflows[idx];
+  var email = state.emails.find(function(e){ return e.id === emailId; });
+  if(email && email.scenario === 'active'){
+    email.scenario = wf.originalScenario || wf.scenario || 'flag';
+  }
   state.workflows.splice(idx, 1);
   updateStats();
   renderWorkflows();
+  renderEmails();
+}
+
+function completeWorkflow(emailId){
+  var idx = state.workflows.findIndex(function(w){ return w.emailId === emailId; });
+  if(idx === -1) return;
+  var wf = state.workflows[idx];
+  var email = state.emails.find(function(e){ return e.id === emailId; });
+  state.completed.unshift({
+    id: 'c_'+Date.now(), emailId: emailId,
+    subject: email?(email.subject||''):'',
+    from: email?getFromDisplay(email):'',
+    scenario: wf.originalScenario||wf.scenario,
+    assignedTo: wf.assignedTo||'',
+    surveyDate: wf.surveyDate||'',
+    vesselName: wf.vesselName||'',
+    completedAt: new Date().toISOString()
+  });
+  saveCompleted();
+  if(email) email.scenario='none';
+  state.actioned++;
+  state.workflows.splice(idx,1);
+  updateStats(); renderWorkflows(); renderEmails();
+  showToast('Workflow completed and archived');
+}
+
+function saveCompleted(){
+  try{ localStorage.setItem('rina_completed',JSON.stringify(state.completed.slice(0,200))); }catch(e){}
+}
+function loadCompleted(){
+  try{ var s=localStorage.getItem('rina_completed'); if(s) state.completed=JSON.parse(s); }catch(e){}
+}
+function clearCompleted(){
+  state.completed=[]; saveCompleted(); renderCompleted();
+}
+function renderCompleted(){
+  var el=document.getElementById('completed-list');
+  if(!el) return;
+  if(!state.completed.length){
+    el.innerHTML='<div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">No completed workflows yet.</div>';
+    return;
+  }
+  el.innerHTML=state.completed.map(function(c){
+    var sc=SCENARIOS[c.scenario]||SCENARIOS.flag;
+    var dt=c.completedAt?new Date(c.completedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'';
+    return '<div style="padding:10px 14px;border:1px solid var(--b1);border-radius:var(--radius-md);background:var(--bg1);margin-bottom:6px;">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+
+      '<span class="tag '+sc.cls+'">'+sc.label+'</span>'+
+      (c.assignedTo?'<span style="font-size:10px;color:var(--t3);">Assigned: <strong style="color:var(--t2);">'+escHtml(c.assignedTo)+'</strong></span>':'')+
+      '<span style="font-size:10px;color:var(--t3);margin-left:auto;">'+dt+'</span>'+
+      '</div>'+
+      '<div style="font-size:12px;font-weight:500;color:var(--t1);">'+escHtml(c.subject||'(no subject)')+'</div>'+
+      '<div style="font-size:11px;color:var(--t3);margin-top:2px;">'+escHtml(c.from)+(c.vesselName?' · '+escHtml(c.vesselName):'')+' · '+escHtml(c.surveyDate||'')+'</div>'+
+      '</div>';
+  }).join('');
 }
 
 function dismissEmail(id){
@@ -2379,6 +2612,442 @@ function loadBlockedSenders(){
   var saved = localStorage.getItem('rina_blocked');
   if(saved){ try{ var arr = JSON.parse(saved); arr.forEach(function(a){ if(!BLOCKED_SENDERS.includes(a)) BLOCKED_SENDERS.push(a); }); } catch(e){} }
 }
+
+// ── REMINDERS ──────────────────────────────────────────────────────────────────
+function saveReminders(){ try{localStorage.setItem('rina_reminders',JSON.stringify(state.reminders));}catch(e){} }
+function loadReminders(){ try{var s=localStorage.getItem('rina_reminders');if(s)state.reminders=JSON.parse(s);}catch(e){} }
+
+function showAddReminder(id){
+  var form=document.getElementById('reminder-form');
+  var titleEl=document.getElementById('reminder-form-title');
+  var editId=document.getElementById('reminder-edit-id');
+  var noteEl=document.getElementById('reminder-note');
+  var dateEl=document.getElementById('reminder-date');
+  var timeEl=document.getElementById('reminder-time');
+  if(id){
+    var r=state.reminders.find(function(x){return x.id===id;});
+    if(!r) return;
+    titleEl.textContent='Edit reminder';
+    editId.value=id;
+    noteEl.value=r.note||'';
+    dateEl.value=r.date||'';
+    timeEl.value=r.time||'09:00';
+  } else {
+    titleEl.textContent='New reminder';
+    editId.value='';
+    noteEl.value='';
+    dateEl.value=new Date().toISOString().split('T')[0];
+    timeEl.value='09:00';
+  }
+  form.style.display='block';
+  form.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function saveReminder(){
+  var note=document.getElementById('reminder-note').value.trim();
+  var date=document.getElementById('reminder-date').value;
+  var time=document.getElementById('reminder-time').value||'09:00';
+  var editId=document.getElementById('reminder-edit-id').value;
+  if(!note||!date){showToast('Please enter a note and date');return;}
+  if(editId){
+    var r=state.reminders.find(function(x){return x.id===editId;});
+    if(r){r.note=note;r.date=date;r.time=time;r.dismissed=false;}
+  } else {
+    state.reminders.push({id:'r_'+Date.now(),note:note,date:date,time:time,dismissed:false,snoozedUntil:null});
+  }
+  saveReminders();
+  renderReminders();
+  updateReminderBadge();
+  document.getElementById('reminder-form').style.display='none';
+  showToast('Reminder saved');
+}
+
+function deleteReminder(id){
+  state.reminders=state.reminders.filter(function(r){return r.id!==id;});
+  saveReminders();
+  renderReminders();
+  updateReminderBadge();
+}
+
+function dismissReminderById(id){
+  var r=state.reminders.find(function(x){return x.id===id;});
+  if(r) r.dismissed=true;
+  saveReminders();
+  renderReminders();
+  updateReminderBadge();
+}
+
+function renderReminders(){
+  var el=document.getElementById('reminders-list');
+  if(!el) return;
+  var active=state.reminders.filter(function(r){return !r.dismissed;});
+  if(!active.length){
+    el.innerHTML='<div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">No active reminders. Click + Add reminder to create one.</div>';
+    return;
+  }
+  active.sort(function(a,b){return (a.date+a.time)<(b.date+b.time)?-1:1;});
+  el.innerHTML=active.map(function(r){
+    var dt=r.date?(new Date(r.date+'T'+r.time).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'})+' '+r.time):'';
+    var isPast=r.date&&(new Date(r.date+'T'+r.time)<new Date());
+    return '<div style="padding:10px 14px;border:1px solid var(--b1);border-radius:var(--radius-md);background:var(--bg1);margin-bottom:6px;'+(isPast?'border-left:3px solid #EF9F27;':'')+'">' +
+      '<div style="display:flex;align-items:flex-start;gap:8px;">' +
+      '<div style="flex:1;min-width:0;">' +
+      '<div style="font-size:12px;color:var(--t1);white-space:pre-wrap;word-break:break-word;">'+escHtml(r.note)+'</div>' +
+      '<div style="font-size:10px;color:'+(isPast?'#EF9F27':'var(--t3)')+';margin-top:4px;">⏰ '+escHtml(dt)+(isPast?' (due)':'')+'</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:4px;flex-shrink:0;">' +
+      '<button onclick="showAddReminder(\''+r.id+'\')" style="font-size:10px;color:var(--t3);background:none;border:1px solid var(--b2);border-radius:4px;cursor:pointer;padding:2px 7px;">Edit</button>' +
+      '<button onclick="deleteReminder(\''+r.id+'\')" style="font-size:10px;color:#B91C1C;background:none;border:1px solid #B91C1C;border-radius:4px;cursor:pointer;padding:2px 7px;">Delete</button>' +
+      '</div></div></div>';
+  }).join('');
+}
+
+function updateReminderBadge(){
+  var due=state.reminders.filter(function(r){
+    if(r.dismissed) return false;
+    if(!r.date) return false;
+    var dt=new Date(r.date+'T'+(r.time||'09:00'));
+    if(r.snoozedUntil && new Date(r.snoozedUntil)>new Date()) return false;
+    return dt<=new Date();
+  }).length;
+  var el=document.getElementById('badge-reminders');
+  if(el) el.textContent=due||'';
+}
+
+function checkReminders(){
+  var now=new Date();
+  var due=state.reminders.filter(function(r){
+    if(r.dismissed) return false;
+    if(!r.date) return false;
+    var dt=new Date(r.date+'T'+(r.time||'09:00'));
+    if(r.snoozedUntil && new Date(r.snoozedUntil)>now) return false;
+    return dt<=now;
+  });
+  if(due.length>0){
+    var r=due[0];
+    state.currentReminderId=r.id;
+    document.getElementById('reminder-popup-text').textContent=r.note;
+    document.getElementById('reminder-popup-time').textContent='Due: '+new Date(r.date+'T'+(r.time||'09:00')).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})+' '+r.time;
+    document.getElementById('reminder-popup').style.display='flex';
+  }
+}
+
+function dismissReminderPopup(){
+  if(state.currentReminderId) dismissReminderById(state.currentReminderId);
+  document.getElementById('reminder-popup').style.display='none';
+  state.currentReminderId=null;
+  // Check if more reminders due
+  setTimeout(checkReminders,500);
+}
+
+function snoozeReminder(){
+  var r=state.reminders.find(function(x){return x.id===state.currentReminderId;});
+  if(r){ var t=new Date(); t.setHours(t.getHours()+1); r.snoozedUntil=t.toISOString(); saveReminders(); }
+  document.getElementById('reminder-popup').style.display='none';
+  state.currentReminderId=null;
+  showToast('Snoozed for 1 hour');
+}
+
+// ── TEMPLATES ─────────────────────────────────────────────────────────────────
+function saveTemplates(){ try{localStorage.setItem('rina_templates',JSON.stringify(state.templates));}catch(e){} }
+function loadTemplates(){
+  try{
+    var s=localStorage.getItem('rina_templates');
+    if(s) state.templates=JSON.parse(s);
+    else loadDefaultTemplates();
+  }catch(e){}
+}
+
+function loadDefaultTemplates(){
+  state.templates=[
+    {id:'t1',name:'Survey acknowledgement',scenario:'survey',body:'Dear {client},\n\nThank you for your request. We acknowledge receipt of the survey request for {vessel} and will revert shortly with arrangements.\n\nBest regards,'},
+    {id:'t2',name:'Surveyor assignment',scenario:'survey',body:'Dear {client},\n\nWe are pleased to advise that our Surveyor will attend {vessel} on {date}. Kindly make the necessary arrangements for access.\n\nBest regards,'},
+    {id:'t3',name:'Plan approval acknowledgement',scenario:'plan',body:'Dear {client},\n\nWe acknowledge receipt of the submitted documents for {vessel} and will revert upon completion of our review.\n\nBest regards,'},
+    {id:'t4',name:'Extension acknowledgement',scenario:'extension',body:'Dear {client},\n\nWe acknowledge receipt of your request for extension of survey for {vessel}. Please note that the extension survey fee of SGD 700 applies. We will revert with further details.\n\nBest regards,'},
+    {id:'t5',name:'General acknowledgement',scenario:'all',body:'Dear {client},\n\nThank you for your email. We are looking into the matter and will revert shortly.\n\nBest regards,'},
+  ];
+  saveTemplates();
+}
+
+function filterTemplates(scenario, el){
+  state.templateFilter=scenario;
+  document.querySelectorAll('#template-scenario-tabs .chip').forEach(function(c){c.classList.remove('on');});
+  if(el) el.classList.add('on');
+  renderTemplates();
+}
+
+function renderTemplates(){
+  var el=document.getElementById('templates-list');
+  if(!el) return;
+  var list=state.templates.filter(function(t){
+    return state.templateFilter==='all'||t.scenario==='all'||t.scenario===state.templateFilter;
+  });
+  if(!list.length){
+    el.innerHTML='<div style="padding:24px;text-align:center;color:var(--t3);font-size:12px;">No templates for this scenario. Click + Add template to create one.</div>';
+    return;
+  }
+  el.innerHTML=list.map(function(t){
+    var sc=t.scenario==='all'?{label:'All scenarios',cls:'t-fl'}:(SCENARIOS[t.scenario]||SCENARIOS.flag);
+    return '<div style="padding:10px 14px;border:1px solid var(--b1);border-radius:var(--radius-md);background:var(--bg1);margin-bottom:6px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+      '<span style="font-size:12px;font-weight:600;color:var(--t1);flex:1;">'+escHtml(t.name)+'</span>' +
+      '<span class="tag '+sc.cls+'">'+sc.label+'</span>' +
+      '<button onclick="editTemplate(\''+t.id+'\')" style="font-size:10px;color:var(--t3);background:none;border:1px solid var(--b2);border-radius:4px;cursor:pointer;padding:2px 7px;">Edit</button>' +
+      '<button onclick="deleteTemplate(\''+t.id+'\')" style="font-size:10px;color:#B91C1C;background:none;border:none;cursor:pointer;padding:2px 4px;">✕</button>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--t2);white-space:pre-wrap;background:var(--bg2);padding:8px 10px;border-radius:6px;max-height:80px;overflow-y:auto;">'+escHtml(t.body)+'</div>' +
+      '<button onclick="copyTemplate(\''+t.id+'\')" class="btn" style="margin-top:8px;font-size:10px;padding:3px 10px;">Copy</button>' +
+      '</div>';
+  }).join('');
+}
+
+function showAddTemplate(){
+  document.getElementById('template-form-title').textContent='New template';
+  document.getElementById('template-edit-id').value='';
+  document.getElementById('template-name').value='';
+  document.getElementById('template-scenario').value='all';
+  document.getElementById('template-body').value='';
+  document.getElementById('template-form').style.display='block';
+}
+
+function editTemplate(id){
+  var t=state.templates.find(function(x){return x.id===id;});
+  if(!t) return;
+  document.getElementById('template-form-title').textContent='Edit template';
+  document.getElementById('template-edit-id').value=id;
+  document.getElementById('template-name').value=t.name;
+  document.getElementById('template-scenario').value=t.scenario;
+  document.getElementById('template-body').value=t.body;
+  document.getElementById('template-form').style.display='block';
+}
+
+function saveTemplate(){
+  var name=document.getElementById('template-name').value.trim();
+  var scenario=document.getElementById('template-scenario').value;
+  var body=document.getElementById('template-body').value.trim();
+  var editId=document.getElementById('template-edit-id').value;
+  if(!name||!body){showToast('Please enter a name and body');return;}
+  if(editId){
+    var t=state.templates.find(function(x){return x.id===editId;});
+    if(t){t.name=name;t.scenario=scenario;t.body=body;}
+  } else {
+    state.templates.push({id:'t_'+Date.now(),name:name,scenario:scenario,body:body});
+  }
+  saveTemplates();
+  renderTemplates();
+  document.getElementById('template-form').style.display='none';
+  showToast('Template saved');
+}
+
+function deleteTemplate(id){
+  state.templates=state.templates.filter(function(t){return t.id!==id;});
+  saveTemplates();
+  renderTemplates();
+}
+
+function copyTemplate(id){
+  var t=state.templates.find(function(x){return x.id===id;});
+  if(!t) return;
+  navigator.clipboard.writeText(t.body).then(function(){showToast('Template copied to clipboard');});
+}
+
+// Insert template into active workflow draft
+function insertTemplate(emailId, templateId){
+  var t=state.templates.find(function(x){return x.id===templateId;});
+  var wf=state.workflows.find(function(w){return w.emailId===emailId;});
+  if(!t||!wf) return;
+  var steps=getWorkflowSteps(wf);
+  var step=steps[wf.step-1];
+  if(!step||!step.draftKey) return;
+  var body=t.body
+    .replace(/\{vessel\}/gi, wf.vesselName||'[vessel]')
+    .replace(/\{date\}/gi,   wf.surveyDate||'[date]')
+    .replace(/\{client\}/gi, wf.clientName||'[client]');
+  wf.drafts[step.draftKey]=body;
+  renderWorkflows();
+  showToast('Template inserted');
+}
+
+// ── CALENDAR VIEW ─────────────────────────────────────────────────────────────
+function renderCalView(){
+  var dateVal=document.getElementById('calview-date').value;
+  if(!dateVal){ showToast('Please select a date'); return; }
+  var el=document.getElementById('calview-content');
+  el.innerHTML='<div class="ai-loading"><div class="spinner"></div> Loading calendar...</div>';
+  dropboxRead('calendar.json').then(function(events){
+    buildCalGrid(events||[], dateVal, el);
+  }).catch(function(){
+    el.innerHTML='<div style="padding:16px;font-size:12px;color:var(--t3);">Could not load calendar. Check Dropbox connection.</div>';
+  });
+}
+
+function buildCalGrid(events, centreDate, el){
+  var centre=new Date(centreDate+'T00:00:00Z');
+  var days=[];
+  for(var i=-5;i<=5;i++){
+    var d=new Date(centre.getTime()+i*86400000);
+    days.push(d);
+  }
+  // Build surveyor → day map
+  var grid={};
+  state.surveyors.forEach(function(s){ grid[s]={}; });
+  events.forEach(function(ev){
+    var parsed=parseCalendarEvent(ev.subject);
+    if(!parsed) return;
+    var evStart=parseEventDate(ev.start);
+    var evEnd=parseEventDate(ev.end);
+    if(!evStart||!evEnd) return;
+    days.forEach(function(day){
+      var dayStr=day.toISOString().split('T')[0];
+      if(isSameDateOrOverlaps(evStart.getTime(),evEnd.getTime(),dayStr)){
+        parsed.names.forEach(function(name){
+          if(state.trainees.indexOf(name)!==-1) return;
+          if(!grid[name]) return;
+          if(!grid[name][dayStr]) grid[name][dayStr]=[];
+          grid[name][dayStr].push({
+            desc:(parsed.vesselDesc||ev.subject||'').substring(0,30),
+            isExcluded:parsed.isExcluded,
+            isTentative:parsed.isTentative,
+            isPartial:parsed.isPartial
+          });
+        });
+      }
+    });
+  });
+  // Render grid
+  var today=new Date().toISOString().split('T')[0];
+  var html='<table style="border-collapse:collapse;width:100%;font-size:11px;">';
+  // Header row
+  html+='<tr><th style="padding:6px 8px;background:var(--bg3);border:1px solid var(--b1);color:var(--t3);font-weight:600;white-space:nowrap;min-width:70px;">Surveyor</th>';
+  days.forEach(function(d){
+    var ds=d.toISOString().split('T')[0];
+    var isToday=ds===today;
+    var isCentre=ds===centreDate;
+    var dow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUTCDay()];
+    var label=dow+' '+d.getUTCDate()+'/'+String(d.getUTCMonth()+1).padStart(2,'0');
+    html+='<th style="padding:6px 8px;border:1px solid var(--b1);text-align:center;background:'+(isCentre?'var(--nvl)':(isToday?'var(--bg3)':'var(--bg2)'))+';color:'+(isCentre?'var(--nv)':'var(--t2)')+';font-weight:'+(isCentre?'700':'500')+';white-space:nowrap;">'+label+'</th>';
+  });
+  html+='</tr>';
+  // Surveyor rows
+  state.surveyors.forEach(function(name){
+    if(state.trainees.indexOf(name)!==-1) return;
+    html+='<tr>';
+    html+='<td style="padding:5px 8px;border:1px solid var(--b1);font-weight:600;color:var(--t1);background:var(--bg1);white-space:nowrap;">'+escHtml(name)+'</td>';
+    days.forEach(function(d){
+      var ds=d.toISOString().split('T')[0];
+      var isCentre=ds===centreDate;
+      var jobs=grid[name][ds]||[];
+      var cellBg=isCentre?'rgba(0,48,135,0.04)':'var(--bg1)';
+      var content='';
+      if(jobs.length){
+        var hasExcluded=jobs.some(function(j){return j.isExcluded;});
+        var hasJob=jobs.some(function(j){return !j.isExcluded;});
+        if(hasExcluded){
+          content='<div style="font-size:9px;color:#B91C1C;font-weight:600;">Leave/Training</div>';
+          cellBg='#FEF2F2';
+        }
+        if(hasJob){
+          content+=jobs.filter(function(j){return !j.isExcluded;}).map(function(j){
+            return '<div style="font-size:9px;color:'+(j.isTentative?'#EF9F27':'var(--t1)')+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px;" title="'+escHtml(j.desc)+'">'+(j.isTentative?'[T] ':'')+escHtml(j.desc)+'</div>';
+          }).join('');
+          if(!hasExcluded) cellBg='#EFF6FF';
+        }
+      }
+      html+='<td style="padding:4px 6px;border:1px solid var(--b1);background:'+cellBg+';min-width:90px;vertical-align:top;">'+(content||'<div style="color:var(--t3);font-size:10px;text-align:center;">—</div>')+'</td>';
+    });
+    html+='</tr>';
+  });
+  html+='</table>';
+  el.innerHTML=html;
+}
+
+// ── EMAIL THREADING ───────────────────────────────────────────────────────────
+function getThreadKey(email){
+  return normaliseSubject(email.subject||'');
+}
+
+function groupEmailsIntoThreads(emails){
+  var threads={};
+  var order=[];
+  emails.forEach(function(e){
+    var key=getThreadKey(e);
+    if(!key){ threads['_'+e.id]=[e]; order.push('_'+e.id); return; }
+    if(!threads[key]){ threads[key]=[]; order.push(key); }
+    threads[key].push(e);
+  });
+  return {threads:threads, order:order};
+}
+
+// ── DAILY BRIEFING ────────────────────────────────────────────────────────────
+function checkDailyBriefing(){
+  var today=new Date().toDateString();
+  var last=localStorage.getItem('rina_briefing_date');
+  if(last===today) return; // already shown today
+  localStorage.setItem('rina_briefing_date', today);
+  setTimeout(showDailyBriefing, 2000); // show 2s after load
+}
+
+function showDailyBriefing(){
+  var unread=state.emails.filter(function(e){ return !e.isRead && e.scenario && e.scenario!=='none' && e.scenario!=='active'; }).length;
+  var activeWf=state.workflows.length;
+  var dueReminders=state.reminders.filter(function(r){
+    if(r.dismissed) return false;
+    return r.date && new Date(r.date+'T'+(r.time||'09:00'))<=new Date();
+  }).length;
+  // Surveyors on leave today
+  var todayStr=new Date().toISOString().split('T')[0];
+  var d=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('briefing-date').textContent=d;
+  var lines=[];
+  lines.push('📬 Unread emails: <strong>'+unread+'</strong>');
+  lines.push('⚙️ Active workflows: <strong>'+activeWf+'</strong>');
+  if(dueReminders) lines.push('⏰ Reminders due: <strong style="color:#EF9F27;">'+dueReminders+'</strong>');
+  if(!unread && !activeWf && !dueReminders) lines.push('✅ All clear — nothing outstanding');
+  document.getElementById('briefing-content').innerHTML=lines.join('<br>');
+  document.getElementById('daily-briefing').style.display='flex';
+}
+
+function closeDailyBriefing(){
+  document.getElementById('daily-briefing').style.display='none';
+}
+
+// ── OFFLINE / STALE DATA INDICATOR ───────────────────────────────────────────
+var lastSuccessfulFetch=null;
+
+function updateOfflineIndicator(){
+  var indicator=document.getElementById('live-indicator');
+  var txt=document.getElementById('live-txt');
+  if(!indicator||!txt) return;
+  if(state.paused) return;
+  if(!lastSuccessfulFetch){
+    setLiveStatus(false,'Not yet connected');
+    return;
+  }
+  var minsAgo=Math.floor((Date.now()-lastSuccessfulFetch)/60000);
+  if(minsAgo<2){
+    setLiveStatus(true,'Monitoring mailbox — live');
+  } else if(minsAgo<10){
+    indicator.style.background='#EF9F27';
+    txt.textContent='Last sync '+minsAgo+'m ago';
+  } else {
+    setLiveStatus(false,'Offline — last sync '+minsAgo+'m ago. Check connection.');
+  }
+}
+
+// Override dropboxRead to track last successful fetch
+var _origDropboxRead=null;
+function patchDropboxRead(){
+  var orig=dropboxRead;
+  dropboxRead=function(filename){
+    return orig(filename).then(function(data){
+      lastSuccessfulFetch=Date.now();
+      updateOfflineIndicator();
+      return data;
+    });
+  };
+}
+
+
 function renderSurveyors(){
   var container = document.getElementById('surveyor-list-container');
   container.innerHTML = state.surveyors.map(function(name, i){
