@@ -860,9 +860,9 @@ function parseEventDate(val){
 }
 
 function fetchCalendarEvents(startDate, endDate){
-  // Pass ALL events — processAvailability handles window filtering
-  // This ensures multi-day events starting before the window are included
   return dropboxRead('calendar.json').then(function(events){
+    console.log('calendar.json events count:', (events||[]).length);
+    if(events && events.length > 0) console.log('Sample event:', JSON.stringify(events[0]));
     return { value: events || [] };
   });
 }
