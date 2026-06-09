@@ -489,7 +489,16 @@ body.dark .draft-ph{color:#FAC775;}
               <button class="btn" onclick="testConnection()">Test Dropbox connection</button>
             </div>
             <div id="settings-status" style="font-size:11px;color:var(--t3);"></div>
+            <div style="padding:10px 12px;background:var(--nvl);border-radius:var(--radius-md);font-size:11px;color:var(--nvt);line-height:1.6;">
               <strong>On/Off leave toggle:</strong> Click the power button next to your name in the sidebar to pause the agent. Power Automate keeps writing emails to Dropbox, but no notifications are triggered until you resume.
+            </div>
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <div class="slbl">Suppressed subjects</div>
+                <button onclick="clearSuppressedSubjects()" style="font-size:10px;color:#B91C1C;background:none;border:1px solid #B91C1C;border-radius:4px;cursor:pointer;padding:2px 8px;margin-left:auto;">Clear all</button>
+              </div>
+              <div id="suppressed-list" style="font-size:11px;color:var(--t3);max-height:120px;overflow-y:auto;border:1px solid var(--b1);border-radius:var(--radius-md);padding:6px 10px;background:var(--bg1);"></div>
+              <div style="font-size:10px;color:var(--t3);margin-top:4px;">Emails with these subjects are silently ignored. Dismissing an inbox email adds it here automatically.</div>
             </div>
           </div>
         </div>
@@ -523,6 +532,7 @@ var state = {
   actioned: 0,
   surveyors: ['Roderick','Gilbert','Jiahui','Zani','Chris','Choy','Sufian','Jiang','Haibo','David','Rawat','Glenn','Lixiang','Nicholas','Faris','Ibrahim','Mahadir','Jerry'],
   trainees: ['Jerry','Mahadir'],
+  suppressedSubjects: [],
   cfg: { sonnetKey:'', haikuKey:'', dropboxRefreshToken:'', mailbox:'singapore.marine@rina.org', calendar:'RINA Singapore Marine' },
   currentFilter: 'all',
   pollInterval: null,
@@ -544,6 +554,7 @@ window.onload = function(){
   try { loadSettings(); } catch(e){}
   try { loadBlockedSenders(); } catch(e){}
   try { loadTrainees(); } catch(e){}
+  try { loadSuppressedSubjects(); } catch(e){}
   try { renderSurveyors(); } catch(e){}
   try { updateLeaveUI(); } catch(e){}
   try { requestNotificationPermission(); } catch(e){}
@@ -584,7 +595,7 @@ function nav(screenId, el){
   document.getElementById('tb-title').textContent = el ? el.dataset.title : screenId;
   document.getElementById('tb-sub').textContent = el ? el.dataset.sub : '';
   if(screenId === 'surveyors') renderSurveyors();
-  if(screenId === 'settings') renderBlockedSenders();
+  if(screenId === 'settings'){ renderBlockedSenders(); renderSuppressedSubjects(); }
 }
 
 // ── Live status ──────────────────────────────────────────────────────────────
@@ -884,8 +895,14 @@ function scanNow(){
       return !state.emails.find(function(e){ return e.id === m.id; });
     });
     // Filter out blocked senders
-    var actionable = newEmails.filter(function(m){
-      return !isSenderBlocked(m);
+    var actionable = newEmails.filter(function(m){ return !isSenderBlocked(m); });
+    // Filter suppressed subjects — silently mark as read/none
+    actionable = actionable.filter(function(m){
+      if(isSubjectSuppressed(m.subject||'')){
+        state.emails.push(Object.assign({},m,{scenario:'none',isRead:true}));
+        return false;
+      }
+      return true;
     });
     newEmails.filter(function(m){ return isSenderBlocked(m); }).forEach(function(m){
       state.emails.push(Object.assign({}, m, { scenario:'none', isRead:true }));
@@ -1065,6 +1082,34 @@ function toggleFyi(){
   var hidden = section.style.display === 'none';
   section.style.display = hidden ? 'block' : 'none';
   arrow.textContent = hidden ? '▼' : '▶';
+}
+
+function clearSuppressedSubjects(){
+  state.suppressedSubjects = [];
+  saveSuppressedSubjects();
+  renderSuppressedSubjects();
+  showToast('Suppressed subjects cleared');
+}
+
+function renderSuppressedSubjects(){
+  var el = document.getElementById('suppressed-list');
+  if(!el) return;
+  if(!state.suppressedSubjects.length){
+    el.innerHTML = '<span style="color:var(--t3);">None — subjects are added here when you dismiss emails</span>';
+    return;
+  }
+  el.innerHTML = state.suppressedSubjects.map(function(s,i){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--b1);">' +
+      '<span style="font-size:11px;color:var(--t2);">' + escHtml(s) + '</span>' +
+      '<button onclick="removeSuppressedSubject(' + i + ')" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:11px;padding:0 4px;">✕</button>' +
+      '</div>';
+  }).join('');
+}
+
+function removeSuppressedSubject(i){
+  state.suppressedSubjects.splice(i,1);
+  saveSuppressedSubjects();
+  renderSuppressedSubjects();
 }
 
 function previewEmail(id){
@@ -1459,17 +1504,44 @@ function closeWorkflow(emailId){
 function dismissEmail(id){
   var email = state.emails.find(function(e){ return e.id === id; });
   if(email){
+    // Suppress this subject so future emails with same subject are silently filtered
+    var subj = normaliseSubject(email.subject || '');
+    if(subj && state.suppressedSubjects.indexOf(subj) === -1){
+      state.suppressedSubjects.push(subj);
+      saveSuppressedSubjects();
+    }
     email.scenario = 'none';
     email.isRead = true;
   }
-  // Close any workflow for this email
   var idx = state.workflows.findIndex(function(w){ return w.emailId === id; });
   if(idx !== -1){ state.actioned++; state.workflows.splice(idx, 1); }
-  // Dismiss associated notification
   dismissNotifByEmailId(id);
   updateStats();
   renderEmails();
   renderWorkflows();
+}
+
+function normaliseSubject(subj){
+  return subj.replace(/^(re|fw|fwd)\s*:\s*/i,'').trim().toLowerCase();
+}
+
+function isSubjectSuppressed(subj){
+  var norm = normaliseSubject(subj||'');
+  if(!norm) return false;
+  return state.suppressedSubjects.some(function(s){
+    return norm === s || norm.startsWith(s) || s.startsWith(norm);
+  });
+}
+
+function saveSuppressedSubjects(){
+  try{ localStorage.setItem('rina_suppressed', JSON.stringify(state.suppressedSubjects)); } catch(e){}
+}
+
+function loadSuppressedSubjects(){
+  try{
+    var saved = localStorage.getItem('rina_suppressed');
+    if(saved) state.suppressedSubjects = JSON.parse(saved);
+  } catch(e){}
 }
 
 // ── Availability checker ──────────────────────────────────────────────────────
@@ -1735,6 +1807,9 @@ function processAvailability(events, dateVal, target, start, end){
     if(state.trainees.indexOf(name) !== -1) return;
     var sm = surveyorMap[name];
     if(!sm) return;
+
+    // Excluded on target (annual leave, training, not available) — do not show
+    if(sm.excludedOnTarget) return;
 
     var activeJobs = sm.jobs.filter(function(j){ return !j.isExcluded; });
 
