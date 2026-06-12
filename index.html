@@ -2,8 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>RINA Agent</title>
+
+<!-- PWA manifest -->
+<link rel="manifest" href="./manifest.json">
+
+<!-- iOS PWA meta tags -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RINA Agent">
+
+<!-- Android / Chrome PWA -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#003087">
+
+<!-- Favicon inline SVG -->
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj48cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjM4IiBmaWxsPSIjMDAzMDg3Ii8+PHBhdGggZD0iTTMzIDk2IEE2MyA2MyAwIDAgMSAxNTkgOTYiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMS40IiBvcGFjaXR5PSIwLjIiLz48cGF0aCBkPSJNNDYgOTYgQTUwIDUwIDAgMCAxIDE0NiA5NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjQiIG9wYWNpdHk9IjAuMzUiLz48cGF0aCBkPSJNNjAgOTYgQTM2IDM2IDAgMCAxIDEzMiA5NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBvcGFjaXR5PSIwLjU1Ii8+PGxpbmUgeDE9Ijk2IiB5MT0iOTYiIHgyPSIxNDEiIHkyPSI2MCIgc3Ryb2tlPSIjNkVCM0UwIiBzdHJva2Utd2lkdGg9IjMuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGNpcmNsZSBjeD0iOTYiIGN5PSI5NiIgcj0iNS41IiBmaWxsPSJ3aGl0ZSIvPjxjaXJjbGUgY3g9IjEzNiIgY3k9IjY1IiByPSI2IiBmaWxsPSIjNkVCM0UwIi8+PHJlY3QgeD0iMjgiIHk9Ijk2IiB3aWR0aD0iMTM2IiBoZWlnaHQ9IjcwIiByeD0iOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHBhdGggZD0iTTI4IDk2IEw5NiAxMjggTDE2NCA5NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48Y2lyY2xlIGN4PSIxNDIiIGN5PSIxNDgiIHI9IjIyIiBmaWxsPSIjMDAxQTVDIiBzdHJva2U9IiM2RUIzRTAiIHN0cm9rZS13aWR0aD0iMy41Ii8+PHRleHQgeD0iMTQyIiB5PSIxNTUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LWZhbWlseT0iR2VvcmdpYSxzZXJpZiIgZm9udC1zaXplPSIxNyIgZm9udC13ZWlnaHQ9ImJvbGQiPlJJPC90ZXh0PjxsaW5lIHgxPSIxNTciIHkxPSIxNjQiIHgyPSIxNzAiIHkyPSIxNzciIHN0cm9rZT0iIzZFQjNFMCIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=">
+
+<!-- iOS home screen icon -->
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj48cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjM4IiBmaWxsPSIjMDAzMDg3Ii8+PHBhdGggZD0iTTMzIDk2IEE2MyA2MyAwIDAgMSAxNTkgOTYiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMS40IiBvcGFjaXR5PSIwLjIiLz48cGF0aCBkPSJNNDYgOTYgQTUwIDUwIDAgMCAxIDE0NiA5NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjQiIG9wYWNpdHk9IjAuMzUiLz48cGF0aCBkPSJNNjAgOTYgQTM2IDM2IDAgMCAxIDEzMiA5NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBvcGFjaXR5PSIwLjU1Ii8+PGxpbmUgeDE9Ijk2IiB5MT0iOTYiIHgyPSIxNDEiIHkyPSI2MCIgc3Ryb2tlPSIjNkVCM0UwIiBzdHJva2Utd2lkdGg9IjMuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGNpcmNsZSBjeD0iOTYiIGN5PSI5NiIgcj0iNS41IiBmaWxsPSJ3aGl0ZSIvPjxjaXJjbGUgY3g9IjEzNiIgY3k9IjY1IiByPSI2IiBmaWxsPSIjNkVCM0UwIi8+PHJlY3QgeD0iMjgiIHk9Ijk2IiB3aWR0aD0iMTM2IiBoZWlnaHQ9IjcwIiByeD0iOCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHBhdGggZD0iTTI4IDk2IEw5NiAxMjggTDE2NCA5NiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48Y2lyY2xlIGN4PSIxNDIiIGN5PSIxNDgiIHI9IjIyIiBmaWxsPSIjMDAxQTVDIiBzdHJva2U9IiM2RUIzRTAiIHN0cm9rZS13aWR0aD0iMy41Ii8+PHRleHQgeD0iMTQyIiB5PSIxNTUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LWZhbWlseT0iR2VvcmdpYSxzZXJpZiIgZm9udC1zaXplPSIxNyIgZm9udC13ZWlnaHQ9ImJvbGQiPlJJPC90ZXh0PjxsaW5lIHgxPSIxNTciIHkxPSIxNjQiIHgyPSIxNzAiIHkyPSIxNzciIHN0cm9rZT0iIzZFQjNFMCIgc3Ryb2tlLXdpZHRoPSI1IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
@@ -28,7 +46,7 @@ body.dark{
   --nv:#5BAEE0;--nvl:rgba(91,174,224,0.12);--nvm:rgba(91,174,224,0.22);--nvt:#5BAEE0;
   --live:#34C759;--cbg:rgba(0,0,0,0.65);
 }
-body{background:var(--bg2);min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;}
+body{background:var(--bg2);min-height:100vh;min-height:100dvh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;padding-top:max(24px, env(safe-area-inset-top));padding-bottom:max(24px, env(safe-area-inset-bottom));}
 
 /* ── Layout ── */
 .app{display:flex;width:100%;max-width:1100px;min-height:calc(100vh - 48px);border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--b1);}
