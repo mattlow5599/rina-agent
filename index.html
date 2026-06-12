@@ -527,6 +527,10 @@ body.dark .draft-ph{color:#FAC775;}
               <button class="btn" onclick="testConnection()">Test Dropbox connection</button>
             </div>
             <div id="settings-status" style="font-size:11px;color:var(--t3);"></div>
+            <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--radius-md);border:1px solid var(--b1);">
+              <div style="font-size:11px;font-weight:600;color:var(--t2);margin-bottom:4px;">Push notifications</div>
+              <div id="notif-permission-status" style="font-size:11px;"></div>
+            </div>
             <div style="padding:10px 12px;background:var(--nvl);border-radius:var(--radius-md);font-size:11px;color:var(--nvt);line-height:1.6;">
               <strong>On/Off leave toggle:</strong> Click the power button next to your name in the sidebar to pause the agent. Power Automate keeps writing emails to Dropbox, but no notifications are triggered until you resume.
             </div>
@@ -822,7 +826,30 @@ window.onload = function(){
         try{ checkDailyBriefing(); }catch(e){}
         // Register service worker for background notifications
         if('serviceWorker' in navigator){
-          navigator.serviceWorker.register('./sw.js').catch(function(){});
+          navigator.serviceWorker.register('./sw.js')
+            .then(function(reg){
+              console.log('[SW] Registered:', reg.scope);
+              // Wait for SW to become active controller
+              function trySendConfig(){
+                if(navigator.serviceWorker.controller){
+                  sendConfigToServiceWorker();
+                } else {
+                  // SW not yet controlling — wait for it
+                  navigator.serviceWorker.addEventListener('controllerchange', function(){
+                    sendConfigToServiceWorker();
+                  });
+                }
+              }
+              if(reg.active){ trySendConfig(); }
+              else {
+                reg.addEventListener('updatefound', function(){
+                  reg.installing.addEventListener('statechange', function(){
+                    if(this.state === 'activated') trySendConfig();
+                  });
+                });
+              }
+            })
+            .catch(function(err){ console.warn('[SW] Registration failed:', err); });
         }
       });
     } else if(state.paused){
@@ -854,7 +881,7 @@ function nav(screenId, el){
   document.getElementById('tb-title').textContent = el ? el.dataset.title : screenId;
   document.getElementById('tb-sub').textContent = el ? el.dataset.sub : '';
   if(screenId === 'surveyors') renderSurveyors();
-  if(screenId === 'settings'){ renderBlockedSenders(); renderSuppressedSubjects(); renderStartTimestamp(); }
+  if(screenId === 'settings'){ renderBlockedSenders(); renderSuppressedSubjects(); renderStartTimestamp(); updateNotifPermissionDisplay(); }
   if(screenId === 'completed') renderCompleted();
   if(screenId === 'reminders'){ renderReminders(); updateReminderBadge(); }
   if(screenId === 'templates') renderTemplates();
@@ -1015,8 +1042,14 @@ function poll(cursor){
 }
 
 function sendConfigToServiceWorker(){
-  if(!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
-  navigator.serviceWorker.controller.postMessage({
+  if(!('serviceWorker' in navigator)) return;
+  var controller = navigator.serviceWorker.controller;
+  if(!controller){
+    // Retry after a short delay
+    setTimeout(sendConfigToServiceWorker, 2000);
+    return;
+  }
+  controller.postMessage({
     type: 'STORE_CONFIG',
     config: {
       refreshToken:       state.cfg.dropboxRefreshToken,
@@ -1027,20 +1060,41 @@ function sendConfigToServiceWorker(){
       startTimestamp:     new Date(localStorage.getItem('rina_start_ts')||0).getTime()
     }
   });
-  // Also send current seen email IDs so SW doesn't re-notify old ones
   var seenIds = state.emails.map(function(e){ return e.id; });
-  navigator.serviceWorker.controller.postMessage({
+  controller.postMessage({
     type: 'STORE_SEEN_IDS',
     ids: seenIds
   });
+  console.log('[SW] Config sent to service worker, seen IDs:', seenIds.length);
 }
 
 // ── Browser push notifications ────────────────────────────────────────────────
 function requestNotificationPermission(){
   if(!('Notification' in window)) return;
-  if(Notification.permission === 'default'){
-    Notification.requestPermission();
+  if(Notification.permission === 'granted'){
+    updateNotifPermissionDisplay();
+    return;
   }
+  if(Notification.permission === 'default'){
+    Notification.requestPermission().then(function(result){
+      console.log('[Notif] Permission:', result);
+      updateNotifPermissionDisplay();
+      if(result === 'granted') sendConfigToServiceWorker();
+    });
+  }
+  updateNotifPermissionDisplay();
+}
+
+function updateNotifPermissionDisplay(){
+  var el = document.getElementById('notif-permission-status');
+  if(!el) return;
+  var p = ('Notification' in window) ? Notification.permission : 'unsupported';
+  var colors = { granted:'#2D6A4F', denied:'#B91C1C', default:'#EF9F27', unsupported:'#8A9DB0' };
+  var labels = { granted:'✓ Notifications allowed', denied:'✗ Notifications blocked — enable in browser settings', default:'⚠ Notifications not yet allowed — tap to enable', unsupported:'Notifications not supported on this browser' };
+  el.style.color = colors[p] || '#8A9DB0';
+  el.textContent = labels[p] || p;
+  el.onclick = p === 'default' ? requestNotificationPermission : null;
+  el.style.cursor = p === 'default' ? 'pointer' : 'default';
 }
 
 function sendBrowserNotification(title, body, scenario){
