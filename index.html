@@ -724,6 +724,22 @@ var state = {
 };
 
 
+function saveEmailsLocally(){
+  try{
+    var toSave = state.emails.slice(0,200).map(function(e){
+      return { id:e.id, subject:e.subject, from:e.from, received:e.received||e.receivedDateTime, scenario:e.scenario, vessel_name:e.vessel_name, survey_date:e.survey_date, client_name:e.client_name, isRead:e.isRead };
+    });
+    localStorage.setItem('rina_emails', JSON.stringify(toSave));
+  } catch(e){}
+}
+
+function loadEmailsLocally(){
+  try{
+    var saved = localStorage.getItem('rina_emails');
+    if(saved && !state.emails.length) state.emails = JSON.parse(saved);
+  } catch(e){}
+}
+
 // ── Dropbox state sync ────────────────────────────────────────────────────────
 // All mutable state is written to /RINA-Agent/state.json in Dropbox
 // so any device picks up exactly where you left off.
@@ -738,6 +754,9 @@ function scheduleSyncToDropbox(){
 
 function syncToDropbox(){
   if(!state.cfg.dropboxRefreshToken) return;
+  // Save email scenarios (active/none states) so they survive cross-device
+  var emailScenarios = {};
+  state.emails.forEach(function(e){ if(e.scenario) emailScenarios[e.id] = e.scenario; });
   var payload = {
     workflows:          state.workflows,
     completed:          state.completed,
@@ -745,6 +764,7 @@ function syncToDropbox(){
     templates:          state.templates,
     suppressedSubjects: state.suppressedSubjects,
     actioned:           state.actioned,
+    emailScenarios:     emailScenarios,
     updatedAt:          new Date().toISOString()
   };
   var body = JSON.stringify(payload);
@@ -776,13 +796,19 @@ function loadStateFromDropbox(){
     if(data.templates          && Array.isArray(data.templates))          state.templates          = data.templates;
     if(data.suppressedSubjects && Array.isArray(data.suppressedSubjects)) state.suppressedSubjects = data.suppressedSubjects;
     if(typeof data.actioned === 'number') state.actioned = data.actioned;
+    // Restore email scenarios from Dropbox state (workflow/active states)
+    if(data.emailScenarios && typeof data.emailScenarios === 'object'){
+      state.emails.forEach(function(e){
+        if(data.emailScenarios[e.id]) e.scenario = data.emailScenarios[e.id];
+      });
+    }
     console.log('State loaded from Dropbox, updated:', data.updatedAt||'unknown');
     updateStats();
     renderEmails();
     renderWorkflows();
     updateReminderBadge();
   }).catch(function(){
-    // state.json doesn't exist yet — that's fine, will be created on first save
+    // state.json doesn't exist yet — fine
   });
 }
 
@@ -805,7 +831,11 @@ window.onload = function(){
   try { loadCompleted(); } catch(e){}
   try { loadReminders(); } catch(e){}
   try { loadTemplates(); } catch(e){}
+  try { loadEmailsLocally(); } catch(e){}  // restore emails from last session
   try { renderSurveyors(); } catch(e){}
+  try { renderEmails(); } catch(e){}       // show restored emails immediately
+  try { renderWorkflows(); } catch(e){}
+  try { updateStats(); } catch(e){}
   try { updateLeaveUI(); } catch(e){}
   try { requestNotificationPermission(); } catch(e){}
   try { patchDropboxRead(); } catch(e){}
@@ -1279,6 +1309,7 @@ function scanNow(){
     }
     classifyEmails(actionable).then(function(classified){
       classified.forEach(function(e){ state.emails.unshift(e); });
+      saveEmailsLocally();
       renderEmails();
       updateStats();
       createNotifications(classified.filter(function(e){ return e.scenario !== 'none'; }));
@@ -1313,7 +1344,7 @@ function isSenderBlocked(email){
   });
 }
 function classifyEmails(emails){
-  var key = state.cfg.haikuKey || state.cfg.sonnetKey;
+  var key = state.cfg.sonnetKey || state.cfg.haikuKey;
   if(!key){
     // No key: return unclassified
     return Promise.resolve(emails.map(function(m){
@@ -1338,7 +1369,7 @@ function classifyEmails(emails){
 
     return fetch('https://rinaworker.matt-low5599.workers.dev', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json', 'x-api-key': state.cfg.sonnetKey||state.cfg.haikuKey||'', 'anthropic-version':'2023-06-01' },
+      headers:{ 'Content-Type':'application/json', 'x-api-key': state.cfg.sonnetKey||'', 'anthropic-version':'2023-06-01' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 200,
@@ -1346,12 +1377,19 @@ function classifyEmails(emails){
       })
     }).then(function(r){ return r.json(); })
       .then(function(data){
+        if(data.error){
+          console.warn('Classification API error:', data.error, data.error_description||'');
+          // API error — keep as unclassified, show as flag with error note
+          return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'', _classifyError: true });
+        }
         var text = (data.content && data.content[0] && data.content[0].text) || '{}';
         try{
           var clean = text.replace(/```json|```/g,'').trim();
           var parsed = JSON.parse(clean);
+          var validScenarios = ['survey','plan','uwild','class','extension','flag','none'];
+          var scenario = validScenarios.indexOf(parsed.scenario) !== -1 ? parsed.scenario : 'flag';
           return Object.assign({}, msg, {
-            scenario:    parsed.scenario || 'flag',
+            scenario:    scenario,
             vessel_name: parsed.vessel_name || '',
             survey_date: parsed.date || '',
             client_name: parsed.client_name || getFromDisplay(msg) || ''
@@ -1359,8 +1397,9 @@ function classifyEmails(emails){
         } catch(e){
           return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'' });
         }
-      }).catch(function(){
-        return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'' });
+      }).catch(function(err){
+        console.warn('Classification fetch error:', err);
+        return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'', _classifyError: true });
       });
   });
   return Promise.all(promises);
@@ -1599,7 +1638,8 @@ function openEmail(id){
   }
 
   email.isRead = true;
-  email.scenario = 'active'; // mark as in-workflow so it leaves inbox
+  var originalScenarioValue = email.scenario || 'flag'; // save BEFORE marking active
+  email.scenario = 'active';
   updateStats();
   renderEmails();
   dismissNotifByEmailId(id);
@@ -1610,7 +1650,7 @@ function openEmail(id){
       emailId:          id,
       email:            email,
       scenario:         email.scenario || 'flag',
-      originalScenario: email.scenario || 'flag',
+      originalScenario: originalScenarioValue,
       step:             1,
       drafts:           {},
       surveyDate:       email.survey_date || '',
@@ -1767,7 +1807,7 @@ function generateDraft(wf, idx, step){
   var prompt = buildDraftPrompt(wf, step.draftKey);
   fetch('https://rinaworker.matt-low5599.workers.dev', {
     method:'POST',
-    headers:{ 'Content-Type':'application/json', 'x-api-key': state.cfg.sonnetKey||state.cfg.haikuKey||'', 'anthropic-version':'2023-06-01' },
+    headers:{ 'Content-Type':'application/json', 'x-api-key': state.cfg.sonnetKey||'', 'anthropic-version':'2023-06-01' },
     body: JSON.stringify({
       model:'claude-sonnet-4-6',
       max_tokens:800,
@@ -1967,6 +2007,7 @@ function dismissEmail(id){
   var idx = state.workflows.findIndex(function(w){ return w.emailId === id; });
   if(idx !== -1){ state.actioned++; state.workflows.splice(idx, 1); }
   dismissNotifByEmailId(id);
+  saveEmailsLocally();
   updateStats();
   renderEmails();
   renderWorkflows();
