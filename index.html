@@ -859,14 +859,27 @@ window.onload = function(){
           navigator.serviceWorker.register('./sw.js')
             .then(function(reg){
               console.log('[SW] Registered:', reg.scope);
-              // Wait for SW to become active controller
+              // Request periodic background sync (Android Chrome)
+              if('periodicSync' in reg){
+                navigator.permissions.query({name:'periodic-background-sync'})
+                  .then(function(status){
+                    if(status.state === 'granted'){
+                      reg.periodicSync.register('check-emails',{minInterval:5*60*1000})
+                        .then(function(){ console.log('[SW] Periodic sync registered'); })
+                        .catch(function(e){ console.log('[SW] Periodic sync:', e.message); });
+                    }
+                  }).catch(function(){});
+              }
               function trySendConfig(){
                 if(navigator.serviceWorker.controller){
                   sendConfigToServiceWorker();
+                  // Trigger immediate check
+                  navigator.serviceWorker.controller.postMessage({type:'CHECK_NOW'});
                 } else {
-                  // SW not yet controlling — wait for it
                   navigator.serviceWorker.addEventListener('controllerchange', function(){
                     sendConfigToServiceWorker();
+                    if(navigator.serviceWorker.controller)
+                      navigator.serviceWorker.controller.postMessage({type:'CHECK_NOW'});
                   });
                 }
               }

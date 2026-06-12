@@ -1,9 +1,45 @@
-// RINA Agent Service Worker
-// Checks Dropbox for new emails in the background and sends push notifications
-// even when the app tab is closed.
+// RINA Agent Service Worker v3
+// Uses IndexedDB for reliable storage and Periodic Background Sync for Android
 
-const CACHE_NAME = 'rina-agent-v1';
-const CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
+const DB_NAME = 'rina-sw-db';
+const DB_VERSION = 1;
+
+// ── IndexedDB helpers ─────────────────────────────────────────────────────────
+function openDB(){
+  return new Promise(function(resolve, reject){
+    var req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = function(e){
+      var db = e.target.result;
+      if(!db.objectStoreNames.contains('config')){
+        db.createObjectStore('config');
+      }
+    };
+    req.onsuccess = function(e){ resolve(e.target.result); };
+    req.onerror   = function(e){ reject(e.target.error); };
+  });
+}
+
+function dbGet(key){
+  return openDB().then(function(db){
+    return new Promise(function(resolve, reject){
+      var tx  = db.transaction('config','readonly');
+      var req = tx.objectStore('config').get(key);
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror   = function(){ reject(req.error); };
+    });
+  });
+}
+
+function dbSet(key, value){
+  return openDB().then(function(db){
+    return new Promise(function(resolve, reject){
+      var tx  = db.transaction('config','readwrite');
+      var req = tx.objectStore('config').put(value, key);
+      req.onsuccess = function(){ resolve(); };
+      req.onerror   = function(){ reject(req.error); };
+    });
+  });
+}
 
 // ── Install & activate ────────────────────────────────────────────────────────
 self.addEventListener('install', function(e){
@@ -11,50 +47,66 @@ self.addEventListener('install', function(e){
 });
 
 self.addEventListener('activate', function(e){
-  e.waitUntil(clients.claim());
-  // Start background sync
-  scheduleCheck();
+  e.waitUntil(
+    clients.claim().then(function(){
+      // Register periodic background sync if available
+      return registerPeriodicSync();
+    })
+  );
 });
 
-// ── Background periodic check ─────────────────────────────────────────────────
-function scheduleCheck(){
-  setTimeout(function(){
-    checkForNewEmails().finally(scheduleCheck);
-  }, CHECK_INTERVAL);
-}
-
-// ── Get stored config from the app ───────────────────────────────────────────
-async function getConfig(){
+async function registerPeriodicSync(){
   try {
-    // Read from the app's localStorage via IDB broadcast or stored config
-    const cache = await caches.open(CACHE_NAME);
-    const resp  = await cache.match('rina-config');
-    if(resp) return resp.json();
-  } catch(e){}
-  return null;
+    if('periodicSync' in self.registration){
+      await self.registration.periodicSync.register('check-emails', {
+        minInterval: 5 * 60 * 1000 // 5 minutes
+      });
+      console.log('[SW] Periodic sync registered');
+    }
+  } catch(e){
+    console.log('[SW] Periodic sync not available:', e.message);
+  }
 }
 
-// ── Store config (called from main app) ──────────────────────────────────────
+// ── Message handler — store config from main app ──────────────────────────────
 self.addEventListener('message', function(e){
-  if(e.data && e.data.type === 'STORE_CONFIG'){
-    caches.open(CACHE_NAME).then(function(cache){
-      cache.put('rina-config', new Response(JSON.stringify(e.data.config)));
+  if(!e.data) return;
+  if(e.data.type === 'STORE_CONFIG'){
+    dbSet('config', e.data.config).then(function(){
+      console.log('[SW] Config stored');
     });
   }
-  if(e.data && e.data.type === 'STORE_SEEN_IDS'){
-    caches.open(CACHE_NAME).then(function(cache){
-      cache.put('rina-seen-ids', new Response(JSON.stringify(e.data.ids)));
-    });
+  if(e.data.type === 'STORE_SEEN_IDS'){
+    dbSet('seenIds', e.data.ids);
+  }
+  // Manual check triggered from app
+  if(e.data.type === 'CHECK_NOW'){
+    checkForNewEmails();
   }
 });
 
-// ── Check Dropbox for new emails ─────────────────────────────────────────────
+// ── Periodic background sync ──────────────────────────────────────────────────
+self.addEventListener('periodicsync', function(e){
+  if(e.tag === 'check-emails'){
+    e.waitUntil(checkForNewEmails());
+  }
+});
+
+// ── Also check when SW wakes for any reason ───────────────────────────────────
+self.addEventListener('fetch', function(e){
+  // Don't intercept fetches, just use as wake opportunity
+});
+
+// ── Core check function ───────────────────────────────────────────────────────
 async function checkForNewEmails(){
   try {
-    const config = await getConfig();
-    if(!config || !config.refreshToken) return;
+    const config = await dbGet('config');
+    if(!config || !config.refreshToken){
+      console.log('[SW] No config — skipping check');
+      return;
+    }
 
-    // Get fresh access token
+    // Get Dropbox access token
     const tokenResp = await fetch('https://api.dropbox.com/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -64,86 +116,85 @@ async function checkForNewEmails(){
             '&client_secret=' + encodeURIComponent(config.appSecret)
     });
     const tokenData = await tokenResp.json();
-    if(!tokenData.access_token) return;
-    const token = tokenData.access_token;
+    if(!tokenData.access_token){
+      console.warn('[SW] Token refresh failed');
+      return;
+    }
 
-    // Read emails.json
+    // Download emails.json
     const emailResp = await fetch('https://content.dropboxapi.com/2/files/download', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + token,
+        'Authorization': 'Bearer ' + tokenData.access_token,
         'Dropbox-API-Arg': JSON.stringify({ path: '/RINA-Agent/emails.json' })
       }
     });
-    if(!emailResp.ok) return;
+    if(!emailResp.ok){ console.warn('[SW] emails.json download failed:', emailResp.status); return; }
     const emails = await emailResp.json();
 
-    // Get already-seen IDs
-    const seenCache = await caches.open(CACHE_NAME);
-    const seenResp  = await seenCache.match('rina-seen-ids');
-    const seenIds   = seenResp ? await seenResp.json() : [];
-    const startTs   = config.startTimestamp || 0;
+    const seenIds  = (await dbGet('seenIds')) || [];
+    const startTs  = config.startTimestamp || 0;
 
-    // Find new emails not yet seen
     const newEmails = (emails || []).filter(function(m){
       if(seenIds.indexOf(m.id) !== -1) return false;
-      if(config.suppressedSubjects){
-        var norm = (m.subject||'').replace(/^(re|fw|fwd)\s*:\s*/i,'').trim().toLowerCase();
-        if(config.suppressedSubjects.indexOf(norm) !== -1) return false;
-      }
       // Check start timestamp
       if(m.received){
         var ts = new Date(m.received).getTime();
         if(!isNaN(ts) && ts < startTs) return false;
       }
+      // Check suppressed subjects
+      if(config.suppressedSubjects && config.suppressedSubjects.length){
+        var norm = (m.subject||'').replace(/^(re|fw|fwd)\s*:\s*/i,'').trim().toLowerCase();
+        if(config.suppressedSubjects.indexOf(norm) !== -1) return false;
+      }
       // Check blocked senders
-      if(config.blockedSenders){
+      if(config.blockedSenders && config.blockedSenders.length){
         var from = (m.from||'').toLowerCase();
-        if(config.blockedSenders.some(function(b){ return from.includes(b); })) return false;
+        if(config.blockedSenders.some(function(b){ return from.includes(b.toLowerCase()); })) return false;
       }
       return true;
     });
 
+    console.log('[SW] New emails found:', newEmails.length);
+
     if(newEmails.length > 0){
       // Update seen IDs
-      const allSeen = seenIds.concat(newEmails.map(function(m){ return m.id; }));
-      await seenCache.put('rina-seen-ids', new Response(JSON.stringify(allSeen)));
+      await dbSet('seenIds', seenIds.concat(newEmails.map(function(m){ return m.id; })));
 
-      // Send notification for each new email (max 3 to avoid spam)
-      const toNotify = newEmails.slice(0, 3);
-      for(const email of toNotify){
-        const subject = email.subject || '(no subject)';
-        const from    = email.from || 'Unknown';
+      // Show notifications
+      if(newEmails.length === 1){
+        var m = newEmails[0];
         await self.registration.showNotification('RINA Agent — New email', {
-          body: from + ': ' + subject,
-          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%23003087"/><text x="50%" y="68%" text-anchor="middle" font-size="18" fill="white" font-family="Georgia">RI</text></svg>',
-          badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="%23003087"/></svg>',
-          tag: 'rina-' + email.id,
+          body:               (m.from || 'Unknown') + '\n' + (m.subject || '(no subject)'),
+          icon:               '/manifest.json', // will fallback gracefully
+          tag:                'rina-' + (m.id || Date.now()),
           requireInteraction: false,
-          data: { url: self.registration.scope }
+          vibrate:            [200, 100, 200],
+          data:               { url: self.registration.scope }
         });
-      }
-      if(newEmails.length > 3){
+      } else {
         await self.registration.showNotification('RINA Agent — ' + newEmails.length + ' new emails', {
-          body: 'Open the app to view and action them.',
-          tag: 'rina-batch',
-          data: { url: self.registration.scope }
+          body:               'Tap to open and review.',
+          tag:                'rina-batch',
+          requireInteraction: false,
+          vibrate:            [200, 100, 200],
+          data:               { url: self.registration.scope }
         });
       }
     }
-  } catch(e){
-    console.warn('[SW] Check failed:', e.message);
+  } catch(err){
+    console.warn('[SW] checkForNewEmails error:', err.message);
   }
 }
 
-// ── Notification click → open app ────────────────────────────────────────────
+// ── Notification click ────────────────────────────────────────────────────────
 self.addEventListener('notificationclick', function(e){
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || self.registration.scope;
+  var url = (e.notification.data && e.notification.data.url) || self.registration.scope;
   e.waitUntil(
-    clients.matchAll({ type:'window', includeUncontrolled:true }).then(function(clientList){
-      for(const client of clientList){
-        if(client.url === url && 'focus' in client) return client.focus();
+    clients.matchAll({ type:'window', includeUncontrolled:true }).then(function(list){
+      for(var i=0; i<list.length; i++){
+        if('focus' in list[i]) return list[i].focus();
       }
       if(clients.openWindow) return clients.openWindow(url);
     })
