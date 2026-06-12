@@ -701,6 +701,69 @@ var state = {
   currentReminderId: null
 };
 
+
+// ── Dropbox state sync ────────────────────────────────────────────────────────
+// All mutable state is written to /RINA-Agent/state.json in Dropbox
+// so any device picks up exactly where you left off.
+var syncTimer = null;
+var syncPending = false;
+
+function scheduleSyncToDropbox(){
+  // Debounce — write at most once every 3 seconds
+  if(syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncToDropbox, 3000);
+}
+
+function syncToDropbox(){
+  if(!state.cfg.dropboxRefreshToken) return;
+  var payload = {
+    workflows:          state.workflows,
+    completed:          state.completed,
+    reminders:          state.reminders,
+    templates:          state.templates,
+    suppressedSubjects: state.suppressedSubjects,
+    actioned:           state.actioned,
+    updatedAt:          new Date().toISOString()
+  };
+  var body = JSON.stringify(payload);
+  getDropboxAccessToken().then(function(token){
+    return fetch('https://content.dropboxapi.com/2/files/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/octet-stream',
+        'Dropbox-API-Arg': JSON.stringify({
+          path: '/RINA-Agent/state.json',
+          mode: 'overwrite',
+          autorename: false,
+          mute: true
+        })
+      },
+      body: body
+    });
+  }).catch(function(e){ console.warn('State sync failed:', e.message); });
+}
+
+function loadStateFromDropbox(){
+  if(!state.cfg.dropboxRefreshToken) return Promise.resolve();
+  return dropboxRead('state.json').then(function(data){
+    if(!data || typeof data !== 'object') return;
+    if(data.workflows          && Array.isArray(data.workflows))          state.workflows          = data.workflows;
+    if(data.completed          && Array.isArray(data.completed))          state.completed          = data.completed;
+    if(data.reminders          && Array.isArray(data.reminders))          state.reminders          = data.reminders;
+    if(data.templates          && Array.isArray(data.templates))          state.templates          = data.templates;
+    if(data.suppressedSubjects && Array.isArray(data.suppressedSubjects)) state.suppressedSubjects = data.suppressedSubjects;
+    if(typeof data.actioned === 'number') state.actioned = data.actioned;
+    console.log('State loaded from Dropbox, updated:', data.updatedAt||'unknown');
+    updateStats();
+    renderEmails();
+    renderWorkflows();
+    updateReminderBadge();
+  }).catch(function(){
+    // state.json doesn't exist yet — that's fine, will be created on first save
+  });
+}
+
 // Scenario config
 var SCENARIOS = {
   survey:    { label:'Survey request',       cls:'t-sv', border:'#003087' },
@@ -734,14 +797,21 @@ window.onload = function(){
   setTimeout(function(){
     if(state.cfg.dropboxRefreshToken && !state.paused){
       setLiveStatus(true, 'Monitoring mailbox — live');
-      startAutoPoll();
+      // Load cross-device state from Dropbox first
+      loadStateFromDropbox().then(function(){
+        startAutoPoll();
+        try{ checkReminders(); }catch(e){}
+        try{ checkDailyBriefing(); }catch(e){}
+        // Register service worker for background notifications
+        if('serviceWorker' in navigator){
+          navigator.serviceWorker.register('./sw.js').catch(function(){});
+        }
+      });
     } else if(state.paused){
       setLiveStatus(false, 'Agent paused — on leave');
     } else {
       setLiveStatus(false, 'Configure Dropbox token in Settings');
     }
-    try{ checkReminders(); }catch(e){}
-    try{ checkDailyBriefing(); }catch(e){}
   }, 500);
 };
 
@@ -795,6 +865,8 @@ function saveSettings(){
   document.getElementById('settings-status').textContent = 'Settings saved.';
   setTimeout(function(){ document.getElementById('settings-status').textContent = ''; }, 2000);
   requestNotificationPermission();
+  // Send config to service worker for background checks
+  sendConfigToServiceWorker();
   longpollActive = false;
   startAutoPoll();
 }
@@ -922,6 +994,27 @@ function poll(cursor){
       longpollActive = false;
       setTimeout(startLongpoll, 10000);
     });
+}
+
+function sendConfigToServiceWorker(){
+  if(!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+  navigator.serviceWorker.controller.postMessage({
+    type: 'STORE_CONFIG',
+    config: {
+      refreshToken:       state.cfg.dropboxRefreshToken,
+      appKey:             'gzsafxn679dq0sh',
+      appSecret:          'tcmgc3q5j8abgd6',
+      suppressedSubjects: state.suppressedSubjects,
+      blockedSenders:     BLOCKED_SENDERS,
+      startTimestamp:     new Date(localStorage.getItem('rina_start_ts')||0).getTime()
+    }
+  });
+  // Also send current seen email IDs so SW doesn't re-notify old ones
+  var seenIds = state.emails.map(function(e){ return e.id; });
+  navigator.serviceWorker.controller.postMessage({
+    type: 'STORE_SEEN_IDS',
+    ids: seenIds
+  });
 }
 
 // ── Browser push notifications ────────────────────────────────────────────────
@@ -1118,6 +1211,8 @@ function scanNow(){
       updateStats();
       createNotifications(classified.filter(function(e){ return e.scenario !== 'none'; }));
       renderNotifications();
+      scheduleSyncToDropbox();
+      sendConfigToServiceWorker();
     });
   }).catch(function(err){
     setLiveStatus(false, 'Error: ' + err.message);
@@ -1713,9 +1808,8 @@ function advanceStep(emailId){
   var wf = state.workflows.find(function(w){ return w.emailId === emailId; });
   if(!wf) return;
   var steps = getWorkflowSteps(wf);
-  if(wf.step < steps.length){
-    wf.step++;
-  }
+  if(wf.step < steps.length){ wf.step++; }
+  scheduleSyncToDropbox();
   renderWorkflows();
 }
 
@@ -1754,11 +1848,10 @@ function completeWorkflow(emailId){
   state.workflows.splice(idx,1);
   updateStats(); renderWorkflows(); renderEmails();
   showToast('Workflow completed and archived');
+  scheduleSyncToDropbox();
 }
 
-function saveCompleted(){
-  try{ localStorage.setItem('rina_completed',JSON.stringify(state.completed.slice(0,200))); }catch(e){}
-}
+function saveCompleted(){ scheduleSyncToDropbox(); }
 function loadCompleted(){
   try{ var s=localStorage.getItem('rina_completed'); if(s) state.completed=JSON.parse(s); }catch(e){}
 }
@@ -1819,9 +1912,7 @@ function isSubjectSuppressed(subj){
   });
 }
 
-function saveSuppressedSubjects(){
-  try{ localStorage.setItem('rina_suppressed', JSON.stringify(state.suppressedSubjects)); } catch(e){}
-}
+function saveSuppressedSubjects(){ scheduleSyncToDropbox(); }
 
 function loadSuppressedSubjects(){
   try{
@@ -2604,9 +2695,7 @@ function removeBlockedSender(i){
   renderBlockedSenders();
 }
 
-function saveBlockedSenders(){
-  localStorage.setItem('rina_blocked', JSON.stringify(BLOCKED_SENDERS));
-}
+function saveBlockedSenders(){ scheduleSyncToDropbox(); }
 
 function loadBlockedSenders(){
   var saved = localStorage.getItem('rina_blocked');
@@ -2614,7 +2703,7 @@ function loadBlockedSenders(){
 }
 
 // ── REMINDERS ──────────────────────────────────────────────────────────────────
-function saveReminders(){ try{localStorage.setItem('rina_reminders',JSON.stringify(state.reminders));}catch(e){} }
+function saveReminders(){ scheduleSyncToDropbox(); }
 function loadReminders(){ try{var s=localStorage.getItem('rina_reminders');if(s)state.reminders=JSON.parse(s);}catch(e){} }
 
 function showAddReminder(id){
@@ -2749,7 +2838,7 @@ function snoozeReminder(){
 }
 
 // ── TEMPLATES ─────────────────────────────────────────────────────────────────
-function saveTemplates(){ try{localStorage.setItem('rina_templates',JSON.stringify(state.templates));}catch(e){} }
+function saveTemplates(){ scheduleSyncToDropbox(); }
 function loadTemplates(){
   try{
     var s=localStorage.getItem('rina_templates');
