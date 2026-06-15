@@ -161,19 +161,33 @@ async function checkForNewEmails(){
       // Update seen IDs
       await dbSet('seenIds', seenIds.concat(newEmails.map(function(m){ return m.id; })));
 
-      // Show notifications
-      if(newEmails.length === 1){
-        var m = newEmails[0];
+      // Separate MPA (high priority) from others
+      var mpaEmails = newEmails.filter(function(m){ return (m.from||'').toLowerCase().indexOf('@mpa.gov.sg') !== -1; });
+      var otherEmails = newEmails.filter(function(m){ return (m.from||'').toLowerCase().indexOf('@mpa.gov.sg') === -1; });
+
+      // MPA — individual high-priority notifications
+      for(const m of mpaEmails){
+        await self.registration.showNotification('\u2691 MPA — Action required', {
+          body:               (m.subject || '(no subject)'),
+          tag:                'rina-mpa-' + (m.id || Date.now()),
+          requireInteraction: true,
+          vibrate:            [300, 100, 300, 100, 300],
+          data:               { url: self.registration.scope }
+        });
+      }
+
+      // Others
+      if(otherEmails.length === 1){
+        var m = otherEmails[0];
         await self.registration.showNotification('RINA Agent — New email', {
           body:               (m.from || 'Unknown') + '\n' + (m.subject || '(no subject)'),
-          icon:               '/manifest.json', // will fallback gracefully
           tag:                'rina-' + (m.id || Date.now()),
           requireInteraction: false,
           vibrate:            [200, 100, 200],
           data:               { url: self.registration.scope }
         });
-      } else {
-        await self.registration.showNotification('RINA Agent — ' + newEmails.length + ' new emails', {
+      } else if(otherEmails.length > 1){
+        await self.registration.showNotification('RINA Agent — ' + otherEmails.length + ' new emails', {
           body:               'Tap to open and review.',
           tag:                'rina-batch',
           requireInteraction: false,

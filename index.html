@@ -90,6 +90,36 @@ body{background:var(--bg2);min-height:100vh;min-height:100dvh;display:flex;align
 .tb-ic{width:30px;height:30px;border-radius:var(--radius-md);background:var(--nvl);display:flex;align-items:center;justify-content:center;}
 .tb-ic svg{width:15px;height:15px;stroke:var(--nvt);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 .tb-title{font-size:13px;font-weight:600;color:var(--t1);}
+
+/* ── Mobile responsive ── */
+.hamburger{display:none;width:36px;height:36px;border-radius:8px;border:none;background:none;cursor:pointer;align-items:center;justify-content:center;flex-shrink:0;margin-right:4px;}
+.hamburger svg{width:22px;height:22px;stroke:var(--t1);fill:none;stroke-width:2;stroke-linecap:round;}
+.sidebar-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:90;}
+
+@media (max-width: 820px){
+  body{padding:0;align-items:stretch;}
+  .app{max-width:100%;min-height:100vh;min-height:100dvh;border-radius:0;border:none;}
+  .sidebar{position:fixed;top:0;left:0;height:100%;height:100dvh;z-index:100;width:265px;max-width:82vw;transform:translateX(-100%);transition:transform 0.25s ease;box-shadow:2px 0 20px rgba(0,0,0,0.3);padding-top:env(safe-area-inset-top);}
+  .sidebar.open{transform:translateX(0);}
+  .sidebar-overlay.show{display:block;}
+  .hamburger{display:flex;}
+  .main{width:100%;}
+  .topbar{padding:0 12px;padding-top:env(safe-area-inset-top);height:auto;min-height:52px;}
+  .tb-title{font-size:14px;}
+  .content{padding:14px 12px !important;padding-bottom:max(14px,env(safe-area-inset-bottom)) !important;}
+  .stats{grid-template-columns:repeat(2,1fr) !important;}
+  .chips{flex-wrap:wrap;}
+  .ec{flex-wrap:wrap;}
+  .ni{padding:11px 16px;font-size:14px;}
+  .ni svg{width:18px;height:18px;}
+  .arow{flex-wrap:wrap;}
+  .arow .btn{font-size:11px;}
+}
+
+@media (max-width: 480px){
+  .stats{grid-template-columns:repeat(2,1fr) !important;gap:8px !important;}
+  .topbar-actions .btn span{display:none;}
+}
 .tb-sub{font-size:11px;color:var(--t3);margin-top:1px;}
 .tb-r{display:flex;gap:8px;align-items:center;}
 .live-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t3);padding:4px 10px;border-radius:20px;border:1px solid var(--b1);background:var(--bg2);}
@@ -283,8 +313,9 @@ body.dark .draft-ph{color:#FAC775;}
 <body>
 
 <div class="app" id="app">
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
   <!-- Sidebar -->
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
     <div class="sb-brand">
       <div class="sb-brand-inner">
         <div class="sb-brand-left">
@@ -381,6 +412,9 @@ body.dark .draft-ph{color:#FAC775;}
   <div class="main">
     <div class="topbar">
       <div class="tb-l">
+        <button class="hamburger" onclick="openSidebar()" aria-label="Menu">
+          <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
         <div class="tb-ic">
           <svg id="tb-icon" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
         </div>
@@ -416,12 +450,12 @@ body.dark .draft-ph{color:#FAC775;}
         </div>
         <div class="chips">
           <div class="chip on" onclick="filterEmails('all',this)">All</div>
-          <div class="chip" onclick="filterEmails('survey',this)">Survey request</div>
+          <div class="chip" onclick="filterEmails('survey',this)">Survey</div>
           <div class="chip" onclick="filterEmails('plan',this)">Plan approval</div>
-          <div class="chip" onclick="filterEmails('uwild',this)">UWILD</div>
-          <div class="chip" onclick="filterEmails('class',this)">Class maintenance</div>
           <div class="chip" onclick="filterEmails('extension',this)">Extension</div>
-          <div class="chip" onclick="filterEmails('flag',this)">Flagged</div>
+          <div class="chip" onclick="filterEmails('misc',this)">Enquiry</div>
+          <div class="chip" onclick="filterEmails('testing',this)">Testing</div>
+          <div class="chip" onclick="filterEmails('unclear',this)">Needs review</div>
         </div>
         <div class="elist" id="email-list">
           <div style="padding:32px;text-align:center;color:var(--t3);font-size:12px;">
@@ -509,6 +543,11 @@ body.dark .draft-ph{color:#FAC775;}
             <div>
               <div class="slbl" style="margin-bottom:4px;">Shared mailbox address</div>
               <input type="text" id="cfg-mailbox" value="singapore.marine@rina.org" style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;" />
+            </div>
+            <div>
+              <div class="slbl" style="margin-bottom:4px;">My email address</div>
+              <input type="text" id="cfg-myemail" value="zuyi.low@rina.org" style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;" />
+              <div style="font-size:10px;color:var(--t3);margin-top:4px;">Emails you send from this address mark a thread as handled, so they won't clutter your inbox.</div>
             </div>
             <div>
               <div class="slbl" style="margin-bottom:4px;">Shared calendar name</div>
@@ -716,7 +755,7 @@ var state = {
   trainees: ['Jerry','Mahadir'],
   suppressedSubjects: [],
   templateFilter: 'all',
-  cfg: { sonnetKey:'', haikuKey:'', dropboxRefreshToken:'', mailbox:'singapore.marine@rina.org', calendar:'RINA Singapore Marine' },
+  cfg: { sonnetKey:'', haikuKey:'', dropboxRefreshToken:'', mailbox:'singapore.marine@rina.org', myEmail:'zuyi.low@rina.org', calendar:'RINA Singapore Marine' },
   currentFilter: 'all',
   pollInterval: null,
   lastAvailability: null,
@@ -726,11 +765,32 @@ var state = {
 
 function saveEmailsLocally(){
   try{
-    var toSave = state.emails.slice(0,200).map(function(e){
-      return { id:e.id, subject:e.subject, from:e.from, received:e.received||e.receivedDateTime, scenario:e.scenario, vessel_name:e.vessel_name, survey_date:e.survey_date, client_name:e.client_name, isRead:e.isRead };
+    var toSave = state.emails.slice(0,120).map(function(e){
+      // Keep body (capped at 6000 chars) and to/cc so Brief can read the thread after refresh
+      var body = e.body || e.bodyPreview || '';
+      if(body.length > 6000) body = body.slice(0,6000);
+      return {
+        id:e.id, subject:e.subject, from:e.from, to:e.to, cc:e.cc,
+        received:e.received||e.receivedDateTime, scenario:e.scenario,
+        vessel_name:e.vessel_name, survey_date:e.survey_date, client_name:e.client_name,
+        requestSummary:e.requestSummary, isMPA:e.isMPA, isRead:e.isRead,
+        body: body
+      };
     });
     localStorage.setItem('rina_emails', JSON.stringify(toSave));
-  } catch(e){}
+  } catch(err){
+    // If quota exceeded, retry with fewer emails and shorter bodies
+    try{
+      var trimmed = state.emails.slice(0,60).map(function(e){
+        var body = (e.body || e.bodyPreview || '').slice(0,2000);
+        return { id:e.id, subject:e.subject, from:e.from, to:e.to, cc:e.cc,
+          received:e.received||e.receivedDateTime, scenario:e.scenario,
+          vessel_name:e.vessel_name, survey_date:e.survey_date, client_name:e.client_name,
+          requestSummary:e.requestSummary, isMPA:e.isMPA, isRead:e.isRead, body:body };
+      });
+      localStorage.setItem('rina_emails', JSON.stringify(trimmed));
+    } catch(e2){}
+  }
 }
 
 function loadEmailsLocally(){
@@ -814,12 +874,13 @@ function loadStateFromDropbox(){
 
 // Scenario config
 var SCENARIOS = {
-  survey:    { label:'Survey request',       cls:'t-sv', border:'#003087' },
-  plan:      { label:'Plan approval',        cls:'t-pl', border:'#534AB7' },
-  uwild:     { label:'UWILD',                cls:'t-uw', border:'#0F6E56' },
-  class:     { label:'Class maintenance',    cls:'t-cl', border:'#5F5E5A' },
-  extension: { label:'Extension survey',     cls:'t-ex', border:'#854F0B' },
-  flag:      { label:'Requires attention',   cls:'t-fl', border:'#888780' }
+  survey:    { label:'Survey request',     cls:'t-sv', border:'#003087' },
+  plan:      { label:'Plan approval',      cls:'t-pl', border:'#534AB7' },
+  extension: { label:'Extension request',  cls:'t-ex', border:'#854F0B' },
+  misc:      { label:'Enquiry',            cls:'t-cl', border:'#0F6E56' },
+  testing:   { label:'Testing job',        cls:'t-uw', border:'#9A3412' },
+  unclear:   { label:'Needs your judgement', cls:'t-fl', border:'#B45309' },
+  flag:      { label:'Requires attention', cls:'t-fl', border:'#888780' }
 };
 
 // ── Init ────────────────────────────────────────────────────────────────────
@@ -828,6 +889,7 @@ window.onload = function(){
   try { loadBlockedSenders(); } catch(e){}
   try { loadTrainees(); } catch(e){}
   try { loadSuppressedSubjects(); } catch(e){}
+  try { loadHandledThreads(); } catch(e){}
   try { loadCompleted(); } catch(e){}
   try { loadReminders(); } catch(e){}
   try { loadTemplates(); } catch(e){}
@@ -903,6 +965,15 @@ window.onload = function(){
   }, 500);
 };
 
+function openSidebar(){
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('show');
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+}
+
 // ── Theme ───────────────────────────────────────────────────────────────────
 function toggleTheme(){
   state.dark = !state.dark;
@@ -929,6 +1000,7 @@ function nav(screenId, el){
   if(screenId === 'reminders'){ renderReminders(); updateReminderBadge(); }
   if(screenId === 'templates') renderTemplates();
   if(screenId === 'calview'){ var t=new Date().toISOString().split('T')[0]; document.getElementById('calview-date').value=t; }
+  closeSidebar();
 }
 
 // ── Live status ──────────────────────────────────────────────────────────────
@@ -947,6 +1019,7 @@ function saveSettings(){
   state.cfg.haikuKey           = document.getElementById('cfg-haiku-key').value.trim();
   state.cfg.dropboxRefreshToken= document.getElementById('cfg-dropbox-token').value.trim();
   state.cfg.mailbox            = document.getElementById('cfg-mailbox').value.trim();
+  state.cfg.myEmail            = document.getElementById('cfg-myemail').value.trim();
   state.cfg.calendar           = document.getElementById('cfg-calendar').value.trim();
   localStorage.setItem('rina_cfg', JSON.stringify(state.cfg));
   localStorage.setItem('rina_paused', state.paused ? '1' : '0');
@@ -967,6 +1040,7 @@ function loadSettings(){
   document.getElementById('cfg-haiku-key').value     = state.cfg.haikuKey            || '';
   document.getElementById('cfg-dropbox-token').value = state.cfg.dropboxRefreshToken || '';
   document.getElementById('cfg-mailbox').value       = state.cfg.mailbox             || 'singapore.marine@rina.org';
+  if(document.getElementById('cfg-myemail')) document.getElementById('cfg-myemail').value = state.cfg.myEmail || 'zuyi.low@rina.org';
   document.getElementById('cfg-calendar').value      = state.cfg.calendar            || 'RINA Singapore Marine';
 }
 
@@ -1150,7 +1224,7 @@ function sendBrowserNotification(title, body, scenario){
       body: body,
       icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%23003087"/><text x="50%" y="68%" text-anchor="middle" font-size="18" fill="white" font-family="Georgia">RI</text></svg>',
       tag: 'rina-' + Date.now(),
-      requireInteraction: scenario === 'class'
+      requireInteraction: scenario === 'mpa' || scenario === 'unclear'
     });
     n.onclick = function(){ window.focus(); n.close(); };
   } catch(e){}
@@ -1305,6 +1379,15 @@ function scanNow(){
     });
     // Filter out blocked senders
     var actionable = newEmails.filter(function(m){ return !isSenderBlocked(m); });
+    // Filter out my own sent emails (already handled) — but keep them recorded
+    actionable = actionable.filter(function(m){
+      if(isMyOwnEmail(m)){
+        state.emails.push(Object.assign({},m,{scenario:'none',isRead:true,_ownReply:true}));
+        markThreadHandled(m.subject||'');
+        return false;
+      }
+      return true;
+    });
     // Filter suppressed subjects — silently mark as read/none
     actionable = actionable.filter(function(m){
       if(isSubjectSuppressed(m.subject||'')){
@@ -1321,7 +1404,15 @@ function scanNow(){
       return;
     }
     classifyEmails(actionable).then(function(classified){
-      classified.forEach(function(e){ state.emails.unshift(e); });
+      classified.forEach(function(e){
+        // If a new client email arrives in a previously-handled thread, resurface it
+        if(isThreadHandled(e.subject) && !isMyOwnEmail(e)){
+          var k = threadKey(e.subject);
+          delete handledThreads[k];
+          saveHandledThreads();
+        }
+        state.emails.unshift(e);
+      });
       saveEmailsLocally();
       renderEmails();
       updateStats();
@@ -1352,70 +1443,130 @@ var BLOCKED_SENDERS = [
 
 function isSenderBlocked(email){
   var addr = getFromAddress(email).toLowerCase();
+  // Never block the main MPA shipping address — it's high priority
+  if(addr.indexOf('shipping@mpa.gov.sg') !== -1) return false;
   return BLOCKED_SENDERS.some(function(b){
     return addr.includes(b.toLowerCase());
   });
 }
+
+function isMyOwnEmail(email){
+  var myEmail = (state.cfg.myEmail || 'zuyi.low@rina.org').toLowerCase();
+  var from = getFromAddress(email).toLowerCase();
+  return from.indexOf(myEmail) !== -1;
+}
+
+// Thread tracking — a thread is "handled" once I've replied to it
+var handledThreads = {};
+function loadHandledThreads(){
+  try{ var s = localStorage.getItem('rina_handled_threads'); if(s) handledThreads = JSON.parse(s); }catch(e){}
+}
+function saveHandledThreads(){
+  try{ localStorage.setItem('rina_handled_threads', JSON.stringify(handledThreads)); }catch(e){}
+}
+function threadKey(subject){
+  return (subject||'').replace(/^(re|fw|fwd)\s*:\s*/ig,'').trim().toLowerCase();
+}
+function markThreadHandled(subject){
+  var k = threadKey(subject);
+  if(k){ handledThreads[k] = Date.now(); saveHandledThreads(); }
+}
+function isThreadHandled(subject){
+  var k = threadKey(subject);
+  return k && handledThreads[k];
+}
 function classifyEmails(emails){
   var key = state.cfg.sonnetKey || state.cfg.haikuKey;
   if(!key){
-    // No key: return unclassified
     return Promise.resolve(emails.map(function(m){
-      return Object.assign({}, m, { scenario: 'flag', scenarioLabel: 'Requires attention' });
+      return Object.assign({}, m, { scenario:'flag', requestSummary:'Add API key in Settings to enable classification' });
     }));
   }
   var promises = emails.map(function(msg){
-    var prompt = 'You are an email classifier for RINA Singapore Marine office. Classify this email into one of these scenarios based on its content and intent:\n\n' +
-      '- survey: A request for surveyor attendance, vessel ETA notification, boarding arrangements, survey scheduling. Could come from a client, ship manager, or internal colleague forwarding a request.\n' +
-      '- plan: Request for review and approval of documents, drawings, CII Rating, SEEMP Part II/III, DMLC, SSP, DCS, or any technical document submission.\n' +
-      '- uwild: Request for underwater inspection in lieu of dry-docking, in-water survey, or anything mentioning IWS notation.\n' +
-      '- class: Request for Class Maintenance Statement or Class Certificate.\n' +
-      '- extension: Request for extension of renewal survey, bottom survey, dry docking due date, or survey extension application.\n' +
-      '- flag: The email requires action or attention from the Singapore office but does not fit the above categories. Use this for urgent matters, PSC detentions, incident notifications, document requests, billing queries that need response, or anything requiring a reply.\n' +
-      '- none: Routine internal notifications, automated system emails, acknowledgements, CC-only emails where no action is needed from Singapore, marketing emails, or emails that are purely informational with no action required.\n\n' +
-      'Important: Emails from internal RINA colleagues (e.g. @rina.org addresses) can still require action — classify based on content not sender.\n\n' +
-      'Also extract if present: vessel_name, date (ISO format), client_name.\n' +
-      'Respond ONLY with valid JSON: {"scenario":"...","vessel_name":"...","date":"...","client_name":"..."}\n\n' +
-      'Subject: ' + (msg.subject || '') + '\n' +
-      'From: ' + (msg.from || '') + '\n' +
-      'Preview: ' + (msg.body || msg.bodyPreview || '');
-
+    var prompt = buildClassificationPrompt(msg);
     return fetch('https://rinaworker.matt-low5599.workers.dev', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json', 'x-api-key': state.cfg.sonnetKey||'', 'anthropic-version':'2023-06-01' },
+      headers:{ 'Content-Type':'application/json', 'x-api-key': key, 'anthropic-version':'2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
+        model: 'claude-sonnet-4-6',
+        max_tokens: 350,
         messages:[{ role:'user', content: prompt }]
       })
     }).then(function(r){ return r.json(); })
       .then(function(data){
         if(data.error){
           console.warn('Classification API error:', data.error, data.error_description||'');
-          // API error — keep as unclassified, show as flag with error note
-          return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'', _classifyError: true });
+          return Object.assign({}, msg, { scenario:'flag', requestSummary:'Could not classify (API error) — review manually', _classifyError:true });
         }
         var text = (data.content && data.content[0] && data.content[0].text) || '{}';
         try{
           var clean = text.replace(/```json|```/g,'').trim();
           var parsed = JSON.parse(clean);
-          var validScenarios = ['survey','plan','uwild','class','extension','flag','none'];
-          var scenario = validScenarios.indexOf(parsed.scenario) !== -1 ? parsed.scenario : 'flag';
+          var validScenarios = ['survey','plan','extension','misc','testing','unclear','none'];
+          var scenario = validScenarios.indexOf(parsed.scenario) !== -1 ? parsed.scenario : 'unclear';
           return Object.assign({}, msg, {
-            scenario:    scenario,
-            vessel_name: parsed.vessel_name || '',
-            survey_date: parsed.date || '',
-            client_name: parsed.client_name || getFromDisplay(msg) || ''
+            scenario:       scenario,
+            requestSummary: parsed.request_summary || '',
+            vessel_name:    parsed.vessel_name || '',
+            survey_date:    parsed.date || '',
+            client_name:    parsed.client_name || getFromDisplay(msg) || '',
+            actionNeeded:   parsed.action_needed === true || parsed.action_needed === 'true',
+            actionReason:   parsed.action_reason || '',
+            isMPA:          getFromAddress(msg).toLowerCase().indexOf('@mpa.gov.sg') !== -1
           });
         } catch(e){
-          return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'' });
+          return Object.assign({}, msg, { scenario:'unclear', requestSummary:'Could not parse classification — review manually', vessel_name:'', survey_date:'', client_name:'' });
         }
       }).catch(function(err){
         console.warn('Classification fetch error:', err);
-        return Object.assign({}, msg, { scenario:'flag', vessel_name:'', survey_date:'', client_name:'', _classifyError: true });
+        return Object.assign({}, msg, { scenario:'flag', requestSummary:'Classification failed — review manually', _classifyError:true });
       });
   });
   return Promise.all(promises);
+}
+
+function buildClassificationPrompt(msg){
+  var myEmail = (state.cfg.myEmail || 'zuyi.low@rina.org').toLowerCase();
+  var shared  = (state.cfg.mailbox || 'singapore.marine@rina.org').toLowerCase();
+  var from = (msg.from || '').toLowerCase();
+  var fromIsMe = from.indexOf(myEmail) !== -1;
+
+  return 'You are an expert email triage assistant for a marine surveyor at RINA Singapore. ' +
+    'The surveyor monitors the shared mailbox ' + shared + ' and acts on emails that REQUEST ACTION from that mailbox. ' +
+    'They reply using their own address ' + myEmail + '.\n\n' +
+    'Your task: decide whether THIS email needs the surveyor to take action, and classify what it is.\n\n' +
+    '=== THE SURVEYOR ACTS ON THESE (action_needed = true) ===\n' +
+    '1. survey — Survey requests: a vessel coming to Singapore needing surveyor attendance, with a date of attendance / ETA, or a straightforward request for a specific survey job (annual, intermediate, renewal, occasional, statutory, class, etc.).\n' +
+    '2. plan — Plan approval submissions: emails asking for attached documents/drawings to be reviewed and approved or forwarded to the plan approval centre (e.g. steering gear drawings, SEEMP Part II/III, SOPEP, stability booklets, technical drawings).\n' +
+    '3. extension — Extension requests: asking to extend a due date for renewal, bottom, tailshaft/propeller shaft, or dry-docking surveys. Often mentions a near/overdue due date and a requested new date, sometimes with a shipyard docking letter attached.\n' +
+    '4. misc — Miscellaneous enquiries directed to the shared mailbox that need a response (account issues, certificate queries, general assistance requests, document requests).\n' +
+    '5. testing — Testing jobs: requests mentioning material testing, witnessing of tests, or review of test-related documents. Often needs the surveyor to clarify details.\n\n' +
+    '=== THE SURVEYOR DOES NOT ACT ON THESE (action_needed = false, scenario = none) ===\n' +
+    '- Any email SENT FROM ' + myEmail + ' (these are the surveyor\'s OWN replies — already handled).\n' +
+    '- Pure acknowledgements / "thank you" / "noted" / "well received" replies that close a loop.\n' +
+    '- Automated system notifications, read receipts, out-of-office auto-replies, delivery confirmations.\n' +
+    '- Marketing, newsletters, circulars, invoices that need no response.\n' +
+    '- Emails purely FYI or CC where the actual action clearly sits with another named party and nothing is asked of the Singapore mailbox.\n\n' +
+    '=== WHEN UNSURE (scenario = unclear, action_needed = true) ===\n' +
+    'If the email might require action but it is genuinely ambiguous, classify as "unclear" and set action_needed true. ' +
+    'In request_summary, explain what is ambiguous and what the surveyor should check.\n\n' +
+    (fromIsMe ? '*** IMPORTANT: This email is FROM the surveyor\'s own address (' + myEmail + '). It is almost certainly their own sent reply — classify as "none" unless it clearly contains a NEW outgoing request awaiting a response. ***\n\n' : '') +
+    (from.indexOf('shipping@mpa.gov.sg') !== -1 || from.indexOf('@mpa.gov.sg') !== -1 ? '*** HIGH PRIORITY: This email is from MPA (Maritime Port Authority of Singapore). MPA emails almost always require action and are time-sensitive. Set action_needed = true unless it is purely an automated acknowledgement. Identify clearly what MPA is asking for in request_summary. ***\n\n' : '') +
+    '=== OUTPUT ===\n' +
+    'Respond ONLY with valid JSON, no markdown:\n' +
+    '{"scenario":"survey|plan|extension|misc|testing|unclear|none",' +
+    '"action_needed":true/false,' +
+    '"request_summary":"one clear sentence: what is being asked / what the surveyor needs to do",' +
+    '"action_reason":"short reason why this does or does not need action",' +
+    '"vessel_name":"vessel name if any",' +
+    '"date":"date of attendance/ETA/due date in plain text if any",' +
+    '"client_name":"sender company or person if identifiable"}\n\n' +
+    '=== EMAIL ===\n' +
+    'From: ' + (msg.from || '') + '\n' +
+    'To: ' + (msg.to || '') + '\n' +
+    'Cc: ' + (msg.cc || '') + '\n' +
+    'Subject: ' + (msg.subject || '') + '\n' +
+    'Body: ' + (msg.body || msg.bodyPreview || '');
 }
 
 // ── Render emails ────────────────────────────────────────────────────────────
@@ -1426,6 +1577,12 @@ function renderEmails(){
     if(e.scenario === 'active') return false; // in workflow — not shown in inbox
     if(state.currentFilter === 'all') return e.scenario && e.scenario !== 'none';
     return e.scenario === state.currentFilter;
+  });
+  // MPA emails always sort to the top
+  actionable.sort(function(a,b){
+    if(a.isMPA && !b.isMPA) return -1;
+    if(!a.isMPA && b.isMPA) return 1;
+    return 0;
   });
 
   var fyi = state.currentFilter === 'all'
@@ -1443,14 +1600,26 @@ function renderEmails(){
     var borderStyle = (!e.isRead && !isFyiEmail) ? 'border-left:3px solid ' + sc.border + ';' : '';
     var dot = (!e.isRead && !isFyiEmail) ? '<div class="udot"></div>' : '';
     var tags = '<span class="tag ' + sc.cls + '">' + sc.label + '</span>';
-    if(e.scenario === 'class') tags += ' <span class="tag t-hp">High priority</span>';
+    if(e.scenario === 'unclear') tags += ' <span class="tag t-hp">Check</span>';
+    if(e.isMPA) tags += ' <span class="tag" style="background:#FEE2E2;color:#B91C1C;font-weight:600;">⚑ MPA — High priority</span>';
     var from = getFromDisplay(e);
     var time = formatTime(e.received || e.receivedDateTime);
     var clickHandler = isFyiEmail
       ? 'previewEmail(\'' + e.id + '\')'
       : 'openEmail(\'' + e.id + '\')';
-    var opacity = isFyiEmail ? 'opacity:0.65;' : '';
+    var opacity = isFyiEmail ? 'opacity:0.6;' : '';
     var summaryId = 'summary-' + e.id.replace(/[^a-z0-9]/gi,'');
+    // Request summary line — the key "what is this" signal
+    var summaryLine = (!isFyiEmail && e.requestSummary)
+      ? '<div style="font-size:11px;color:var(--t2);margin-top:3px;line-height:1.45;background:var(--bg2);padding:5px 8px;border-radius:6px;border-left:2px solid ' + sc.border + ';">' + escHtml(e.requestSummary) + '</div>'
+      : '';
+    var metaLine = '';
+    if(!isFyiEmail && (e.vessel_name || e.survey_date)){
+      var bits = [];
+      if(e.vessel_name) bits.push('🚢 ' + escHtml(e.vessel_name));
+      if(e.survey_date) bits.push('📅 ' + escHtml(e.survey_date));
+      metaLine = '<div style="font-size:10px;color:var(--t3);margin-top:3px;">' + bits.join('  ·  ') + '</div>';
+    }
     return '<div class="ec' + isFlagged + '" style="' + borderStyle + opacity + '" id="card-' + summaryId + '" data-email-id="' + e.id.replace(/"/g,'&quot;') + '">' +
       '<div class="ei" onclick="' + clickHandler + '" style="cursor:pointer;">' +
       '<div class="eic" style="background:' + sc.border + '18;">' +
@@ -1459,6 +1628,8 @@ function renderEmails(){
       '<div class="em">' +
       '<div class="efr">' + escHtml(from) + '</div>' +
       '<div class="esub">' + escHtml(e.subject || '(no subject)') + '</div>' +
+      summaryLine +
+      metaLine +
       '<div class="etags">' + tags + '</div>' +
       '</div>' +
       '</div>' +
@@ -1577,7 +1748,7 @@ function summariseEmail(emailId, summaryId){
 
   // Show loading
   panel.style.display = 'block';
-  panel.innerHTML = '<div class="ai-loading"><div class="spinner"></div> Summarising with Claude...</div>';
+  panel.innerHTML = '<div class="ai-loading"><div class="spinner"></div> Reading the thread with Claude...</div>';
 
   var key = state.cfg.sonnetKey || state.cfg.haikuKey;
   if(!key){
@@ -1585,20 +1756,50 @@ function summariseEmail(emailId, summaryId){
     return;
   }
 
-  var subject = email.subject || '(no subject)';
-  var body    = email.body || email.bodyPreview || '(no content)';
-  var from    = getFromDisplay(email);
+  // ── Gather the full thread ──
+  // Approach 1: collect all stored emails sharing the same normalised subject
+  var tkey = threadKey(email.subject || '');
+  var threadEmails = state.emails.filter(function(e){
+    return threadKey(e.subject || '') === tkey;
+  });
+  // Sort oldest → newest by received date
+  threadEmails.sort(function(a,b){
+    var ta = new Date(a.received || a.receivedDateTime || 0).getTime();
+    var tb = new Date(b.received || b.receivedDateTime || 0).getTime();
+    return ta - tb;
+  });
+  // Make sure the clicked email is included
+  if(threadEmails.indexOf(email) === -1) threadEmails.push(email);
 
-  var prompt = 'You are a summariser for a marine surveyor at RINA Singapore. Analyse this email and provide a concise briefing.\n\n' +
-    'From: ' + from + '\n' +
-    'Subject: ' + subject + '\n' +
-    'Content: ' + body + '\n\n' +
-    'Provide a brief structured summary with these sections:\n' +
-    '**Purpose/Request:** What is being asked or communicated?\n' +
-    '**Key Details:** Vessel name, dates, specific requirements or references (if any)\n' +
-    '**Current State:** What is the current situation or progress based on this email?\n' +
-    '**Action Required:** What does the Singapore office need to do? If no action needed, say so clearly.\n\n' +
-    'Be concise — 2-3 sentences per section maximum. Use plain text, no markdown symbols.';
+  // Build the thread text. Each stored email contributes its body (which often
+  // also contains the quoted history beneath it — approach 2).
+  var threadText = '';
+  threadEmails.forEach(function(e, i){
+    var when = formatDateTime(e.received || e.receivedDateTime) || '';
+    threadText += '--- Message ' + (i+1) + ' of ' + threadEmails.length + ' ---\n' +
+      'From: ' + getFromDisplay(e) + '\n' +
+      'To: ' + (e.to || '') + '\n' +
+      (e.cc ? 'Cc: ' + e.cc + '\n' : '') +
+      'Date: ' + when + '\n' +
+      'Subject: ' + (e.subject || '') + '\n' +
+      'Body: ' + (e.body || e.bodyPreview || '(no content captured)') + '\n\n';
+  });
+
+  var latest = threadEmails[threadEmails.length - 1];
+  var threadCount = threadEmails.length;
+
+  var prompt = 'You are an expert assistant for a marine surveyor at RINA Singapore who monitors the shared mailbox ' +
+    (state.cfg.mailbox || 'singapore.marine@rina.org') + '. ' +
+    'Below is an email thread (it may be a single message, or several messages, and each message body may also contain quoted earlier replies beneath it). ' +
+    'Read the ENTIRE thread and give the surveyor the full story as briefly as possible so they understand what is going on without opening Outlook.\n\n' +
+    'THREAD (' + threadCount + ' stored message' + (threadCount>1?'s':'') + ', oldest first):\n\n' +
+    threadText + '\n' +
+    'Provide your briefing in exactly these sections (plain text, no markdown symbols):\n' +
+    'Story so far: A brief chronological account of what has happened in this thread — who asked what, what was answered, how it developed. Keep it tight (2-4 sentences). If it is a single message with no history, say so and summarise it.\n' +
+    'Latest message: Summarise the most recent message (from ' + getFromDisplay(latest) + ') and state clearly what is currently being requested or what is outstanding right now.\n' +
+    'Key details: Vessel name, IMO/RI number, dates (ETA/attendance/due date), document types, shipyard — whatever appears.\n' +
+    'Action required: Precisely what the surveyor needs to do next. If nothing, say "No action required" and why.\n' +
+    'Urgency: Note if time-sensitive (near due date, vessel arriving soon, MPA request) or routine.';
 
   fetch('https://rinaworker.matt-low5599.workers.dev', {
     method: 'POST',
@@ -1608,23 +1809,27 @@ function summariseEmail(emailId, summaryId){
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 400,
+      model: 'claude-sonnet-4-6',
+      max_tokens: 700,
       messages: [{ role: 'user', content: prompt }]
     })
   }).then(function(r){ return r.json(); })
     .then(function(data){
+      if(data.error){ panel.innerHTML = '<div style="color:var(--t3);">Could not summarise (API error). Check your API key.</div>'; return; }
       var text = (data.content && data.content[0] && data.content[0].text) || 'Unable to summarise this email.';
-      // Format sections with colour
-      var formatted = text
-        .replace(/Purpose\/Request:/g, '<strong style="color:var(--nvt);">Purpose / Request:</strong>')
-        .replace(/Key Details:/g, '<strong style="color:var(--nvt);">Key Details:</strong>')
-        .replace(/Current State:/g, '<strong style="color:var(--nvt);">Current State:</strong>')
-        .replace(/Action Required:/g, '<strong style="color:var(--nvt);">Action Required:</strong>')
+      var formatted = escHtml(text)
+        .replace(/Story so far:/g,    '<strong style="color:var(--nvt);">Story so far:</strong>')
+        .replace(/Latest message:/g,  '<strong style="color:var(--nvt);">Latest message:</strong>')
+        .replace(/Key details:/gi,    '<strong style="color:var(--nvt);">Key details:</strong>')
+        .replace(/Action required:/gi, '<strong style="color:var(--nvt);">Action required:</strong>')
+        .replace(/Urgency:/g,         '<strong style="color:var(--nvt);">Urgency:</strong>')
         .replace(/\n/g, '<br>');
-      panel.innerHTML = formatted +
+      var threadNote = threadCount > 1
+        ? '<div style="font-size:10px;color:var(--t3);margin-bottom:8px;">📨 ' + threadCount + ' messages in this thread</div>'
+        : '<div style="font-size:10px;color:var(--t3);margin-bottom:8px;">📨 Single message' + ((latest.body||latest.bodyPreview||'').length < 300 ? ' — limited content captured (see Power Automate note)' : '') + '</div>';
+      panel.innerHTML = threadNote + formatted +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
-        '<button class="btn btn-n" style="font-size:10px;padding:4px 10px;" onclick="openEmail(\'' + emailId + '\')">Open workflow ↗</button>' +
+        '<button class="btn btn-n" style="font-size:10px;padding:4px 10px;" onclick="openEmail(\'' + emailId + '\')">Start workflow ↗</button>' +
         '<button class="btn" style="font-size:10px;padding:4px 10px;" onclick="document.getElementById(\'' + summaryId + '\').style.display=\'none\'">Close</button>' +
         '</div>';
     }).catch(function(){
@@ -2669,49 +2874,37 @@ function shiftDate(base, days){
 
 // ── Notifications ────────────────────────────────────────────────────────────
 function shouldNotify(email){
-  var scenario  = email.scenario;
-  var fromAddr  = getFromAddress(email).toLowerCase();
-  var isInternal = fromAddr.includes('@rina.org') || fromAddr.includes('singapore.marine');
-
-  // Always notify regardless of sender
-  if(scenario === 'class')     return true; // Class maintenance — always high priority
-  if(scenario === 'uwild')     return true; // UWILD — always notify
-  if(scenario === 'extension') return true; // Extension survey — always notify
-
-  // Notify if from external sender
-  if(!isInternal){
-    if(scenario === 'survey')  return true; // External survey request
-    if(scenario === 'plan')    return true; // External plan approval submission
-    if(scenario === 'flag')    return true; // External flagged email
-  }
-
-  // Internal RINA emails — only notify for survey requests (colleague forwarding)
-  if(isInternal && scenario === 'survey') return true;
-
-  // Everything else — inbox only, no notification
-  return false;
+  // Notify for anything that needs action — the agent's whole job
+  var actionableScenarios = ['survey','plan','extension','misc','testing','unclear'];
+  return actionableScenarios.indexOf(email.scenario) !== -1;
 }
 
 function createNotifications(classified){
   classified.forEach(function(e){
     var exists = state.notifications.find(function(n){ return n.emailId === e.id; });
     if(exists) return;
-    if(!shouldNotify(e)) return; // Skip non-priority emails
+    if(!shouldNotify(e)) return;
     var sc = SCENARIOS[e.scenario] || SCENARIOS.flag;
+    // Build a detailed notification body so it's triageable from the lock screen
+    var bodyParts = [];
+    if(e.requestSummary) bodyParts.push(e.requestSummary);
+    var meta = [];
+    if(e.vessel_name) meta.push(e.vessel_name);
+    if(e.survey_date) meta.push(e.survey_date);
+    if(meta.length) bodyParts.push(meta.join(' · '));
+    bodyParts.push('From: ' + getFromDisplay(e));
     var notif = {
       id:       'n_' + Date.now() + Math.random(),
       emailId:  e.id,
       scenario: e.scenario,
-      title:    sc.label + (e.vessel_name ? ' — ' + e.vessel_name : ''),
-      text:     getFromDisplay(e) +
-                (e.survey_date ? ' · ' + formatDate(e.survey_date) : '') +
-                '. Click to open workflow.',
+      title:    (e.isMPA ? '⚑ MPA — ' : '') + sc.label + (e.vessel_name ? ' — ' + e.vessel_name : ''),
+      text:     (e.requestSummary || 'Tap to review') + ' · From: ' + getFromDisplay(e),
       time:     formatTime(e.received || e.receivedDateTime),
-      isHigh:   e.scenario === 'class',
+      isHigh:   e.isMPA || e.scenario === 'unclear' || e.scenario === 'extension',
       dismissed:false
     };
     state.notifications.unshift(notif);
-    sendBrowserNotification(notif.title, notif.text, e.scenario);
+    sendBrowserNotification((e.isMPA ? '⚑ MPA — ' : '') + sc.label + (e.vessel_name ? ' — ' + e.vessel_name : ''), bodyParts.join('\n'), e.isMPA ? 'mpa' : e.scenario);
   });
   updateNotifBadge();
 }
@@ -3341,6 +3534,10 @@ function formatDate(iso){
   if(!iso) return '';
   try{ return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); } catch(e){ return iso; }
 }
+function formatDateTime(iso){
+  if(!iso) return '';
+  try{ return new Date(iso).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e){ return iso; }
+}
 function getScenarioIcon(scenario, color){
   var icons = {
     survey:    '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M2 21c.6.5 1.2 1 2.5 1C7 22 7 20 9.5 20s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.3.8 4.4 2.1 6"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/></svg>',
@@ -3348,6 +3545,9 @@ function getScenarioIcon(scenario, color){
     uwild:     '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 2v6"/><path d="M12 22v-2"/><path d="M4.93 4.93l4.24 4.24"/><path d="M14.83 14.83l4.24 4.24"/><path d="M2 12h6"/><path d="M16 12h6"/><circle cx="12" cy="12" r="4"/></svg>',
     class:     '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
     extension: '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    misc:      '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    testing:   '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M9 2v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V2"/><line x1="7" y1="2" x2="17" y2="2"/><line x1="8.5" y1="13" x2="15.5" y2="13"/></svg>',
+    unclear:   '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
     flag:      '<svg style="width:14px;height:14px;stroke:'+color+';fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>'
   };
   return icons[scenario] || icons.flag;
