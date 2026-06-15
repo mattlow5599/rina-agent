@@ -952,7 +952,22 @@ function loadStateFromDropbox(){
   if(!state.cfg.dropboxRefreshToken) return Promise.resolve();
   return dropboxRead('state.json').then(function(data){
     if(!data || typeof data !== 'object') return;
-    if(data.workflows          && Array.isArray(data.workflows))          state.workflows          = data.workflows;
+    if(data.workflows          && Array.isArray(data.workflows)){
+      state.workflows = data.workflows;
+      // Repair any workflows whose scenario was stored as 'active' (old bug)
+      state.workflows.forEach(function(wf){
+        if(wf.scenario === 'active' || !wf.scenario){
+          if(wf.originalScenario && wf.originalScenario !== 'active'){
+            wf.scenario = wf.originalScenario;
+          } else {
+            // Try to recover from the linked email's stored scenario
+            var em = state.emails.find(function(e){ return e.id === wf.emailId; });
+            wf.scenario = (em && em.scenario && em.scenario !== 'active' && em.scenario !== 'none') ? em.scenario : 'flag';
+            wf.originalScenario = wf.scenario;
+          }
+        }
+      });
+    }
     if(data.completed          && Array.isArray(data.completed))          state.completed          = data.completed;
     if(data.reminders          && Array.isArray(data.reminders))          state.reminders          = data.reminders;
     if(data.templates          && Array.isArray(data.templates))          state.templates          = data.templates;
@@ -2052,7 +2067,7 @@ function openEmail(id){
     var wf = {
       emailId:          id,
       email:            email,
-      scenario:         email.scenario || 'flag',
+      scenario:         originalScenarioValue,
       originalScenario: originalScenarioValue,
       step:             1,
       drafts:           {},
@@ -2169,6 +2184,7 @@ function renderWorkflow(wf, idx){
 
 function getWorkflowSteps(wf){
   var s = wf.scenario;
+  if(s === 'active' || !s) s = wf.originalScenario || 'flag';
   if(s === 'survey') return [
     { title:'Send acknowledgement to client', desc:'Draft ready — copy to Outlook', draftKey:'ack', draftLabel:'Acknowledgement email to client' },
     { title:'Forward to Sherry — open job', desc:'Request job number from commercial team', draftKey:'sherry', draftLabel:'Email to Sherry · Commercial team' },
@@ -2180,20 +2196,24 @@ function getWorkflowSteps(wf){
     { title:'Email Sherry — quotation request', desc:'Request quotation and job opening', draftKey:'sherry', draftLabel:'Email to Sherry · Commercial team' },
     { title:'Reply to client', desc:'Draft reply once you have reviewed the documents', draftKey:'client', draftLabel:'Reply to client' }
   ];
-  if(s === 'uwild') return [
-    { title:'Send acknowledgement to client', desc:'UWILD acknowledgement with conditions', draftKey:'ack', draftLabel:'Acknowledgement email to client' },
-    { title:'Email MTS for approval', desc:'Attach ship status document', draftKey:'mts', draftLabel:'Email to MTS · Marine Tech Support' },
-    { title:'Await MTS approval', desc:'Check availability once date confirmed', manualNote:'Once MTS approves, obtain date of attendance from client then check availability.' },
-    { title:'Assign surveyor', desc:'Draft assignment email to client', draftKey:'assign', draftLabel:'Assignment email to client' }
-  ];
-  if(s === 'class') return [
-    { title:'Review email and action', desc:'High priority — check vessel details in database', manualNote:'This is a high-priority Class Maintenance Statement request. Check the vessel in the RINA database and action accordingly.' }
-  ];
   if(s === 'extension') return [
-    { title:'Send acknowledgement to client', desc:'SGD700 fee, Flag approval required', draftKey:'ack', draftLabel:'Acknowledgement email to client' },
-    { title:'Draft email to MPA Flag', desc:'Prepare Flag application with placeholders', draftKey:'flag', draftLabel:'Email to MPA · Flag Authority' },
+    { title:'Send acknowledgement to client', desc:'Acknowledge the extension request', draftKey:'ack', draftLabel:'Acknowledgement email to client' },
+    { title:'Draft email to MPA / Flag', desc:'Prepare Flag application with placeholders', draftKey:'flag', draftLabel:'Email to MPA · Flag Authority' },
     { title:'Await Flag approval', desc:'Once approved, inform client and assign surveyor', manualNote:'Await Flag approval. Once received, proceed to inform client and assign surveyor.' },
     { title:'Inform client and assign surveyor', desc:'Draft client notification and check availability', draftKey:'assign', draftLabel:'Client notification email' }
+  ];
+  if(s === 'misc') return [
+    { title:'Review the enquiry', desc:'Understand what is being asked', manualNote:'Read the enquiry and determine what assistance is needed.' },
+    { title:'Draft a reply', desc:'Respond to the enquiry', draftKey:'client', draftLabel:'Reply to sender' }
+  ];
+  if(s === 'testing') return [
+    { title:'Review the testing request', desc:'Identify what testing or document review is required', manualNote:'Check what is being requested. If details are missing, request clarification before proceeding.' },
+    { title:'Request clarification (if needed)', desc:'Ask for any missing details', draftKey:'client', draftLabel:'Clarification request to sender' },
+    { title:'Draft reply / confirm job', desc:'Confirm the testing job once details are clear', draftKey:'assign', draftLabel:'Confirmation reply' }
+  ];
+  if(s === 'unclear') return [
+    { title:'Review and decide', desc:'Determine whether this needs action', manualNote:'This email was flagged as unclear. Review it and decide if it requires action. If it does, action manually or start the appropriate steps.' },
+    { title:'Draft a reply (if needed)', desc:'Respond if a reply is required', draftKey:'client', draftLabel:'Reply to sender' }
   ];
   return [
     { title:'Review and action', desc:'This email requires your attention', manualNote:'This email could not be matched to a specific workflow. Please review and action manually.' }
