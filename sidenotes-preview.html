@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Side Notes Preview</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,sans-serif;background:#EEF1F6;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px;position:relative;}
+  .caption{position:fixed;top:8px;left:50%;transform:translateX(-50%);font-size:12px;color:#5A6B82;background:#fff;padding:6px 14px;border-radius:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1);z-index:200;}
+  .app{display:flex;width:1100px;height:620px;border-radius:12px;overflow:hidden;border:1px solid rgba(0,30,80,0.09);box-shadow:0 8px 30px rgba(0,0,0,0.1);background:#fff;}
+  .side{width:230px;background:linear-gradient(170deg,#0A1F3C,#071529);}
+  .main{flex:1;background:#F4F6FA;}
+  .top{height:72px;background:linear-gradient(170deg,#27405F,#1B3047);}
+
+  .side-notes{position:fixed;top:120px;width:200px;z-index:50;}
+  .side-notes-left{left:calc(50% - 550px - 215px);}
+  .side-notes-right{right:calc(50% - 550px - 215px);}
+  .side-notes-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8A9DB0;margin-bottom:14px;padding-left:6px;display:flex;align-items:center;gap:6px;}
+  .side-notes-title .c{width:7px;height:7px;border-radius:50%;}
+  .side-notes-left .side-notes-title .c{background:#E0A93B;}
+  .side-notes-right .side-notes-title .c{background:#E0651C;}
+  .note-stack{position:relative;margin-bottom:16px;}
+  .pnote{width:185px;min-height:96px;padding:13px 14px 12px;border-radius:3px;box-shadow:2px 4px 12px rgba(0,0,0,0.16);cursor:pointer;position:relative;font-family:'Segoe Print','Comic Sans MS',cursive;transition:transform 0.18s,box-shadow 0.18s;}
+  .pnote::before{content:'';position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:48px;height:15px;background:rgba(255,255,255,0.55);border:1px solid rgba(0,0,0,0.04);}
+  .pnote .pn-text{font-size:12.5px;color:#3A3A2A;line-height:1.4;margin-bottom:9px;}
+  .pnote .pn-date{font-size:10px;color:rgba(0,0,0,0.45);font-weight:600;font-family:-apple-system,sans-serif;}
+  .pnote.c0{background:#FFF3B0;transform:rotate(-2deg);}
+  .pnote.c1{background:#FFD8C2;transform:rotate(1.5deg);}
+  .pnote.c2{background:#C8F0D0;transform:rotate(-1deg);}
+  .pnote.c3{background:#CDE3FF;transform:rotate(2deg);}
+  .unote{width:188px;min-height:96px;padding:14px;border-radius:12px;box-shadow:0 4px 14px rgba(0,30,80,0.18);cursor:pointer;position:relative;color:#fff;background:linear-gradient(160deg,#27405F,#1B3047);}
+  .unote.overdue{background:linear-gradient(160deg,#7A3B1E,#5E2C14);}
+  .unote .un-tag{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9FB6D2;margin-bottom:8px;display:flex;align-items:center;gap:5px;}
+  .unote .un-tag::before{content:'';width:6px;height:6px;border-radius:50%;background:#6FB7E8;}
+  .unote.overdue .un-tag{color:#F2B271;}
+  .unote.overdue .un-tag::before{background:#F2B271;}
+  .unote .un-text{font-size:12px;line-height:1.42;margin-bottom:9px;}
+  .unote .un-date{font-size:10px;color:#9FB6D2;font-weight:600;}
+  .unote.overdue .un-date{color:#E8C4A8;}
+  .note-stack .stack-item{transition:transform 0.22s,margin 0.22s;}
+  .note-stack.stacked .stack-item:not(:first-child){margin-top:-78px;}
+  .note-stack.stacked:hover .stack-item:not(:first-child){margin-top:14px;}
+  .stack-more{font-size:10px;color:#8A9DB0;text-align:center;margin-top:6px;font-weight:600;}
+  .note-stack.stacked:hover .stack-more{display:none;}
+  .hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);font-size:11px;color:#8A9DB0;}
+</style></head>
+<body>
+  <div class="caption">Preview - hover the stacks to fan them down. Left = upcoming Post-its · Right = due/overdue navy notes</div>
+
+  <div class="side-notes side-notes-left">
+    <div class="side-notes-title"><span class="c"></span> Upcoming</div>
+    <div class="note-stack stacked">
+      <div class="stack-item pnote c0"><div class="pn-text">Submit SMPEP amendments to plan approval centre</div><div class="pn-date">18 Jun 10:00</div></div>
+      <div class="stack-item pnote c1"><div class="pn-text">Chase RFQ - Saint Vincent annual class survey</div><div class="pn-date">20 Jun 09:00</div></div>
+      <div class="stack-item pnote c2"><div class="pn-text">Prepare booklet for confined space refresher</div><div class="pn-date">22 Jun 14:00</div></div>
+      <div class="stack-more">+2 more</div>
+    </div>
+  </div>
+
+  <div class="side-notes side-notes-right">
+    <div class="side-notes-title"><span class="c"></span> Due &amp; overdue</div>
+    <div class="note-stack stacked">
+      <div class="stack-item unote overdue"><div class="un-tag">Overdue</div><div class="un-text">Follow up with MPA on overdue SE renewal survey</div><div class="un-date">2 days ago</div></div>
+      <div class="stack-item unote"><div class="un-tag">Due today</div><div class="un-text">Call shipyard re: Bold Explorer docking date</div><div class="un-date">Today 15:00</div></div>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="side"></div>
+    <div class="main"><div class="top"></div></div>
+  </div>
+  <div class="hint">This is how it sits around your centred app on a wide screen.</div>
+</body></html>
