@@ -194,6 +194,9 @@ body{background:var(--bg2);min-height:100vh;min-height:100dvh;display:flex;align
 .tb-btn{display:flex;align-items:center;gap:6px;font-size:12px;padding:8px 15px;border-radius:9px;border:none;background:#fff;color:#27405F;cursor:pointer;font-family:inherit;font-weight:700;transition:transform 0.12s,box-shadow 0.12s;}
 .tb-btn:hover{box-shadow:0 4px 12px rgba(0,0,0,0.2);}
 .tb-btn svg{width:13px;height:13px;stroke:#27405F;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.usage-chip{display:flex;align-items:center;gap:5px;font-size:11px;color:#CFE0F2;font-weight:600;padding:6px 11px;border-radius:20px;background:rgba(255,255,255,0.1);cursor:pointer;transition:background 0.14s;}
+.usage-chip:hover{background:rgba(255,255,255,0.18);}
+.usage-chip svg{width:12px;height:12px;stroke:#9FB6D2;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 
 /* ── Content ── */
 .content{flex:1;overflow-y:auto;padding:16px 20px;}
@@ -501,6 +504,10 @@ body.dark .draft-ph{color:#FAC775;}
         </div>
       </div>
       <div class="tb-r">
+        <div class="usage-chip" id="usage-indicator" onclick="showUsageDetail()" title="Estimated API usage today — tap for details">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span id="usage-today">$0.00</span>
+        </div>
         <div class="live-badge" id="live-badge"><div class="live-badge-dot"></div> Live</div>
         <button class="tb-btn" onclick="scanNow()">
           <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -786,6 +793,17 @@ body.dark .draft-ph{color:#FAC775;}
 </div><!-- /app -->
 
 <!-- Reminder popup overlay -->
+<!-- Usage detail popup -->
+<div id="usage-detail" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--cbg);z-index:1001;align-items:center;justify-content:center;" onclick="if(event.target===this)closeUsageDetail()">
+  <div style="background:var(--bg1);border-radius:var(--radius-lg);padding:22px;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:15px;font-weight:700;color:var(--t1);">API usage estimate</div>
+      <button onclick="closeUsageDetail()" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:18px;">✕</button>
+    </div>
+    <div id="usage-detail-body"></div>
+  </div>
+</div>
+
 <!-- Sticky note action menu -->
 <div id="note-menu" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--cbg);z-index:1001;align-items:center;justify-content:center;" onclick="closeNoteMenu(event)">
   <div style="background:var(--bg1);border-radius:var(--radius-lg);padding:20px;max-width:340px;width:88%;box-shadow:0 20px 60px rgba(0,0,0,0.3);" onclick="event.stopPropagation()">
@@ -1008,6 +1026,7 @@ window.onload = function(){
   try { loadSuppressedSubjects(); } catch(e){}
   try { loadHandledThreads(); } catch(e){}
   try { loadSeenClearedIds(); } catch(e){}
+  try { loadUsage(); updateUsageIndicator(); } catch(e){}
   try { loadCompleted(); } catch(e){}
   try { loadReminders(); } catch(e){}
   try { loadTemplates(); } catch(e){}
@@ -1562,11 +1581,22 @@ function scanNow(){
       }
       return true;
     });
+    // Cheap rule-based pre-filter — mark obvious non-actionable mail as 'none'
+    // WITHOUT calling the API. Saves classification cost on newsletters,
+    // auto-replies, no-reply senders, delivery receipts, etc.
+    actionable = actionable.filter(function(m){
+      if(isObviousNoAction(m)){
+        state.emails.push(Object.assign({}, m, { scenario:'none', isRead:true, requestSummary:'Auto-filtered — no action' }));
+        return false;
+      }
+      return true;
+    });
     newEmails.filter(function(m){ return isSenderBlocked(m); }).forEach(function(m){
       state.emails.push(Object.assign({}, m, { scenario:'none', isRead:true }));
     });
     if(actionable.length === 0){
       renderEmails();
+      saveEmailsLocally();
       return;
     }
     classifyEmails(actionable).then(function(classified){
@@ -1591,6 +1621,29 @@ function scanNow(){
     setLiveStatus(false, 'Error: ' + err.message);
   });
 }
+
+// Rule-based pre-filter: catch obvious no-action mail before spending an API call
+function isObviousNoAction(m){
+  var from = (getFromAddress(m) || '').toLowerCase();
+  var subj = (m.subject || '').toLowerCase();
+
+  // No-reply / automated sender addresses
+  if(/no[-_.]?reply|do[-_.]?not[-_.]?reply|noreply|mailer-daemon|postmaster|notifications?@|automated|auto-confirm/.test(from)) return true;
+
+  // Delivery / read receipts and auto-replies
+  if(/^(undeliverable|delivery (status|receipt|has failed)|read:|automatic reply|out of office|auto:|autoreply)/.test(subj)) return true;
+  if(/mail delivery (failed|subsystem)|delivery notification/.test(subj)) return true;
+
+  // Pure acknowledgements / pleasantries that close a loop (short subject only)
+  if(/^(re:\s*)?(thank you|thanks|noted|well received|received with thanks|ok noted|acknowledged)\.?$/.test(subj.trim())) return true;
+
+  // Newsletters / marketing / circulars
+  if(/newsletter|unsubscribe|webinar|promotion|marketing|circular|bulletin/.test(subj)) return true;
+
+  return false;
+}
+
+// Rule-based pre-filter end
 
 // ── Sender blocklist — emails from these are silently ignored ─────────────────
 var BLOCKED_SENDERS = [
@@ -1641,6 +1694,75 @@ function isThreadHandled(subject){
   var k = threadKey(subject);
   return k && handledThreads[k];
 }
+// ── API usage tracking ────────────────────────────────────────────────────────
+var MODEL_PRICING = {
+  'claude-haiku-4-5-20251001': { in: 1.00,  out: 5.00 },
+  'claude-sonnet-4-6':         { in: 3.00,  out: 15.00 }
+};
+var usageData = { calls:0, inTokens:0, outTokens:0, cost:0, byDay:{} };
+
+function loadUsage(){
+  try{ var s = localStorage.getItem('rina_usage'); if(s) usageData = JSON.parse(s); }catch(e){}
+  if(!usageData.byDay) usageData.byDay = {};
+}
+function saveUsage(){
+  try{ localStorage.setItem('rina_usage', JSON.stringify(usageData)); }catch(e){}
+}
+function recordUsage(model, data){
+  try{
+    if(!data || !data.usage) return;
+    var inTok  = data.usage.input_tokens  || 0;
+    var outTok = data.usage.output_tokens || 0;
+    var price  = MODEL_PRICING[model] || MODEL_PRICING['claude-sonnet-4-6'];
+    var cost   = (inTok/1e6)*price.in + (outTok/1e6)*price.out;
+    usageData.calls++;
+    usageData.inTokens  += inTok;
+    usageData.outTokens += outTok;
+    usageData.cost      += cost;
+    var day = new Date().toISOString().split('T')[0];
+    if(!usageData.byDay[day]) usageData.byDay[day] = { calls:0, cost:0 };
+    usageData.byDay[day].calls++;
+    usageData.byDay[day].cost += cost;
+    saveUsage();
+    updateUsageIndicator();
+  }catch(e){}
+}
+function updateUsageIndicator(){
+  var el = document.getElementById('usage-today');
+  if(el){
+    var today = new Date().toISOString().split('T')[0];
+    var todayCost = (usageData.byDay[today] && usageData.byDay[today].cost) || 0;
+    el.textContent = '$' + todayCost.toFixed(2);
+  }
+}
+function showUsageDetail(){
+  var today = new Date().toISOString().split('T')[0];
+  var todayData = usageData.byDay[today] || { calls:0, cost:0 };
+  var rows = '';
+  var days = Object.keys(usageData.byDay).sort().reverse().slice(0,7);
+  days.forEach(function(d){
+    var v = usageData.byDay[d];
+    rows += '<div style="display:flex;justify-content:space-between;font-size:11px;padding:5px 0;border-bottom:1px solid var(--b1);"><span style="color:var(--t3);">' + d + '</span><span style="color:var(--t2);">' + v.calls + ' calls · $' + v.cost.toFixed(3) + '</span></div>';
+  });
+  document.getElementById('usage-detail-body').innerHTML =
+    '<div style="display:flex;gap:10px;margin-bottom:14px;">' +
+      '<div style="flex:1;background:var(--bg2);border-radius:9px;padding:11px;"><div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--t3);">Today</div><div style="font-size:20px;font-weight:700;color:var(--t1);margin-top:3px;">$' + todayData.cost.toFixed(2) + '</div><div style="font-size:10px;color:var(--t3);">' + todayData.calls + ' API calls</div></div>' +
+      '<div style="flex:1;background:var(--bg2);border-radius:9px;padding:11px;"><div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--t3);">All time</div><div style="font-size:20px;font-weight:700;color:var(--t1);margin-top:3px;">$' + (usageData.cost||0).toFixed(2) + '</div><div style="font-size:10px;color:var(--t3);">' + usageData.calls + ' calls · ' + ((usageData.inTokens+usageData.outTokens)/1000).toFixed(0) + 'k tokens</div></div>' +
+    '</div>' +
+    '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--t3);margin-bottom:6px;">Last 7 days</div>' +
+    (rows || '<div style="font-size:11px;color:var(--t3);">No usage yet.</div>') +
+    '<div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.5;">Estimated from token usage at standard API prices. Actual Anthropic billing may differ.</div>' +
+    '<button class="btn" style="margin-top:12px;font-size:11px;" onclick="resetUsage()">Reset counter</button>';
+  document.getElementById('usage-detail').style.display = 'flex';
+}
+function closeUsageDetail(){ document.getElementById('usage-detail').style.display = 'none'; }
+function resetUsage(){
+  if(confirm('Reset the usage counter to zero? This only clears the in-app estimate, not your Anthropic bill.')){
+    usageData = { calls:0, inTokens:0, outTokens:0, cost:0, byDay:{} };
+    saveUsage(); updateUsageIndicator(); closeUsageDetail();
+  }
+}
+
 function classifyEmails(emails){
   var key = state.cfg.sonnetKey || state.cfg.haikuKey;
   if(!key){
@@ -1654,12 +1776,13 @@ function classifyEmails(emails){
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'x-api-key': key, 'anthropic-version':'2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 350,
         messages:[{ role:'user', content: prompt }]
       })
     }).then(function(r){ return r.json(); })
       .then(function(data){
+        recordUsage('claude-haiku-4-5-20251001', data);
         if(data.error){
           console.warn('Classification API error:', data.error, data.error_description||'');
           return Object.assign({}, msg, { scenario:'flag', requestSummary:'Could not classify (API error) — review manually', _classifyError:true });
@@ -1732,7 +1855,7 @@ function buildClassificationPrompt(msg){
     'To: ' + (msg.to || '') + '\n' +
     'Cc: ' + (msg.cc || '') + '\n' +
     'Subject: ' + (msg.subject || '') + '\n' +
-    'Body: ' + (msg.body || msg.bodyPreview || '');
+    'Body: ' + (msg.body || msg.bodyPreview || '').slice(0, 600);
 }
 
 // ── Render emails ────────────────────────────────────────────────────────────
@@ -2015,6 +2138,7 @@ function summariseEmail(emailId, summaryId){
     })
   }).then(function(r){ return r.json(); })
     .then(function(data){
+      recordUsage('claude-sonnet-4-6', data);
       if(data.error){ panel.innerHTML = '<div style="color:var(--t3);">Could not summarise (API error). Check your API key.</div>'; return; }
       var text = (data.content && data.content[0] && data.content[0].text) || 'Unable to summarise this email.';
       var formatted = escHtml(text)
@@ -2131,8 +2255,16 @@ function renderWorkflow(wf, idx){
     if(currentStep && currentStep.draftKey){
       var draft = wf.drafts[currentStep.draftKey];
       if(draft === undefined){
-        draftHtml = '<div class="ai-loading"><div class="spinner"></div> Generating draft...</div>';
-        setTimeout(function(){ generateDraft(wf, idx, currentStep); }, 100);
+        // Don't auto-generate — wait for the user to press the button (saves API cost)
+        draftHtml = '<div class="slbl" style="margin-top:2px">' + (currentStep.draftLabel || 'Draft email') + '</div>' +
+          '<div style="padding:14px;background:var(--bg2);border:1px dashed var(--b2);border-radius:var(--radius-md);font-size:12px;color:var(--t3);text-align:center;">' +
+          'No draft yet. Generate one with Claude when you\'re ready.</div>';
+        actionHtml = '<div class="arow">' +
+          '<button class="btn btn-n" onclick="generateDraftNow(\'' + wf.emailId + '\')">✦ Generate draft</button>' +
+          (wf.scenario === 'survey' || wf.scenario === 'extension' ? '<button class="btn" onclick="goToAvailability(\'' + (wf.surveyDate||'') + '\')">Check availability</button>' : '') +
+          (wf.step < steps.length ? '<button class="btn" onclick="advanceStep(\'' + wf.emailId + '\')">Skip → Next step</button>' : '<button class="btn" onclick="completeWorkflow(\'' + wf.emailId + '\')">✓ Complete</button>') +
+          '<button class="btn" onclick="closeWorkflow(\'' + wf.emailId + '\')">Close</button>' +
+          '</div>';
       } else if(draft === 'loading'){
         draftHtml = '<div class="ai-loading"><div class="spinner"></div> Generating draft with Claude...</div>';
       } else {
@@ -2221,6 +2353,15 @@ function getWorkflowSteps(wf){
 }
 
 // ── Draft generation ──────────────────────────────────────────────────────────
+function generateDraftNow(emailId){
+  var wf = state.workflows.find(function(w){ return w.emailId === emailId; });
+  if(!wf) return;
+  var steps = getWorkflowSteps(wf);
+  var step = steps[wf.step - 1];
+  if(!step || !step.draftKey) return;
+  generateDraft(wf, wf.step - 1, step);
+}
+
 function generateDraft(wf, idx, step){
   var key = state.cfg.sonnetKey;
   if(!key){
@@ -2242,6 +2383,7 @@ function generateDraft(wf, idx, step){
     })
   }).then(function(r){ return r.json(); })
     .then(function(data){
+      recordUsage('claude-sonnet-4-6', data);
       var text = (data.content && data.content[0] && data.content[0].text) || getDraftTemplate(wf, step.draftKey);
       wf.drafts[step.draftKey] = text.trim();
       renderWorkflows();
@@ -2319,6 +2461,7 @@ function refineDraft(emailId, stepIdx){
     })
   }).then(function(r){ return r.json(); })
     .then(function(data){
+      recordUsage('claude-sonnet-4-6', data);
       var text = (data.content && data.content[0] && data.content[0].text) || draft;
       wf.drafts[step.draftKey] = text.trim();
       renderWorkflows();
