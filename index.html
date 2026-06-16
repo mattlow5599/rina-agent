@@ -1895,6 +1895,18 @@ function loadSeenClearedIds(){
 function renderEmails(){
   var list = document.getElementById('email-list');
 
+  // Deduplicate by id — keep the richest copy (prefer classified/summary)
+  var byId = {};
+  state.emails.forEach(function(e){
+    var ex = byId[e.id];
+    if(!ex){ byId[e.id] = e; return; }
+    // prefer the one with a requestSummary, else the actionable one
+    var score = (e.requestSummary?2:0) + (e.scenario && e.scenario!=='none'?1:0);
+    var exScore = (ex.requestSummary?2:0) + (ex.scenario && ex.scenario!=='none'?1:0);
+    if(score > exScore) byId[e.id] = e;
+  });
+  state.emails = state.emails.filter(function(e){ return byId[e.id] === e; });
+
   var actionable = state.emails.filter(function(e){
     if(e.scenario === 'active') return false; // in workflow — not shown in inbox
     if(state.currentFilter === 'all') return e.scenario && e.scenario !== 'none';
@@ -2574,16 +2586,18 @@ function handleDismissClick(btn){
 }
 
 function dismissEmail(id){
-  var email = state.emails.find(function(e){ return e.id === id; });
-  if(email){
-    // Suppress this subject so future emails with same subject are silently filtered
-    var subj = normaliseSubject(email.subject || '');
+  // Mark ALL emails with this id as none (handles accidental duplicate IDs)
+  var matched = state.emails.filter(function(e){ return e.id === id; });
+  matched.forEach(function(email){
+    email.scenario = 'none';
+    email.isRead = true;
+  });
+  if(matched.length){
+    var subj = normaliseSubject(matched[0].subject || '');
     if(subj && state.suppressedSubjects.indexOf(subj) === -1){
       state.suppressedSubjects.push(subj);
       saveSuppressedSubjects();
     }
-    email.scenario = 'none';
-    email.isRead = true;
   }
   var idx = state.workflows.findIndex(function(w){ return w.emailId === id; });
   if(idx !== -1){ state.actioned++; state.workflows.splice(idx, 1); }
