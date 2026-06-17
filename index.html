@@ -114,6 +114,7 @@ body{background:var(--bg2);min-height:100vh;min-height:100dvh;display:flex;align
 .side-notes-left{left:calc(50% - 550px - 210px);}
 .side-notes-right{right:calc(50% - 550px - 210px);}
 @media (min-width:1340px){ .side-notes{display:block;} }
+.side-notes.hide-notes{display:none !important;}
 .side-notes-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8A9DB0;margin-bottom:14px;padding-left:6px;display:flex;align-items:center;gap:6px;}
 .side-notes-title .c{width:7px;height:7px;border-radius:50%;}
 .side-notes-left .side-notes-title .c{background:#E0A93B;}
@@ -1027,6 +1028,7 @@ window.onload = function(){
   try { loadHandledThreads(); } catch(e){}
   try { loadSeenClearedIds(); } catch(e){}
   try { loadUsage(); updateUsageIndicator(); } catch(e){}
+  try { loadScanAnalytics(); } catch(e){}
   try { loadCompleted(); } catch(e){}
   try { loadReminders(); } catch(e){}
   try { loadTemplates(); } catch(e){}
@@ -1128,10 +1130,12 @@ function toggleTheme(){
 
 // ── Navigation ───────────────────────────────────────────────────────────────
 function nav(screenId, el){
+  currentScreen = screenId;
   document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('on'); });
   document.querySelectorAll('.ni').forEach(function(n){ n.classList.remove('on'); });
   document.getElementById('screen-'+screenId).classList.add('on');
   if(el) el.classList.add('on');
+  renderSideNotes();
   document.getElementById('tb-title').textContent = el ? el.dataset.title : screenId;
   // Inbox keeps the address + live status meta; other screens show a plain subtitle
   var addrEl = document.getElementById('tb-sub');
@@ -1562,13 +1566,29 @@ function scanNow(){
       }
       return true;
     });
+    // ── Analytics counters for this scan ──
+    var scanStats = { total:newEmails.length, blocked:0, ownReply:0, colleague:0, suppressed:0, autoNoAction:0, classified:0 };
+
     // Filter out blocked senders
+    var blockedCount = newEmails.filter(function(m){ return isSenderBlocked(m); }).length;
+    scanStats.blocked = blockedCount;
     var actionable = newEmails.filter(function(m){ return !isSenderBlocked(m); });
     // Filter out my own sent emails (already handled) — but keep them recorded
     actionable = actionable.filter(function(m){
       if(isMyOwnEmail(m)){
+        scanStats.ownReply++;
         state.emails.push(Object.assign({},m,{scenario:'none',isRead:true,_ownReply:true}));
         markThreadHandled(m.subject||'');
+        return false;
+      }
+      return true;
+    });
+    // Filter out colleague emails (they work with me — no action needed)
+    actionable = actionable.filter(function(m){
+      if(isColleagueEmail(m)){
+        scanStats.colleague++;
+        state.emails.push(Object.assign({},m,{scenario:'none',isRead:true,_colleague:true}));
+        markThreadHandled(m.subject||''); // colleague handling counts as handled
         return false;
       }
       return true;
@@ -1576,16 +1596,16 @@ function scanNow(){
     // Filter suppressed subjects — silently mark as read/none
     actionable = actionable.filter(function(m){
       if(isSubjectSuppressed(m.subject||'')){
+        scanStats.suppressed++;
         state.emails.push(Object.assign({},m,{scenario:'none',isRead:true}));
         return false;
       }
       return true;
     });
     // Cheap rule-based pre-filter — mark obvious non-actionable mail as 'none'
-    // WITHOUT calling the API. Saves classification cost on newsletters,
-    // auto-replies, no-reply senders, delivery receipts, etc.
     actionable = actionable.filter(function(m){
       if(isObviousNoAction(m)){
+        scanStats.autoNoAction++;
         state.emails.push(Object.assign({}, m, { scenario:'none', isRead:true, requestSummary:'Auto-filtered — no action' }));
         return false;
       }
@@ -1594,6 +1614,8 @@ function scanNow(){
     newEmails.filter(function(m){ return isSenderBlocked(m); }).forEach(function(m){
       state.emails.push(Object.assign({}, m, { scenario:'none', isRead:true }));
     });
+    scanStats.classified = actionable.length;
+    recordScanStats(scanStats);
     if(actionable.length === 0){
       renderEmails();
       saveEmailsLocally();
@@ -1675,8 +1697,48 @@ function isMyOwnEmail(email){
   return from.indexOf(myEmail) !== -1;
 }
 
+// Colleagues who work with me — their emails need no action from me
+var COLLEAGUE_EMAILS = [
+  'dongnyeok.kim@rina.org',
+  'wu.haibo@rina.org',
+  'lixiang.liang@rina.org',
+  'tommy.jen@rina.org',
+  'ken.chin@rina.org'
+];
+function isColleagueEmail(email){
+  var from = getFromAddress(email).toLowerCase();
+  return COLLEAGUE_EMAILS.some(function(c){ return from.indexOf(c.toLowerCase()) !== -1; });
+}
+
+// ── Scan analytics (learns your email pattern; no API cost) ──────────────────
+var scanAnalytics = { scans:[], totals:{ total:0, blocked:0, ownReply:0, colleague:0, suppressed:0, autoNoAction:0, classified:0 } };
+function loadScanAnalytics(){
+  try{ var s = localStorage.getItem('rina_scan_analytics'); if(s) scanAnalytics = JSON.parse(s); }catch(e){}
+  if(!scanAnalytics.scans) scanAnalytics.scans = [];
+  if(!scanAnalytics.totals) scanAnalytics.totals = { total:0, blocked:0, ownReply:0, colleague:0, suppressed:0, autoNoAction:0, classified:0 };
+}
+function saveScanAnalytics(){
+  try{ localStorage.setItem('rina_scan_analytics', JSON.stringify(scanAnalytics)); }catch(e){}
+}
+function recordScanStats(s){
+  if(s.total === 0) return; // ignore empty scans
+  var now = new Date();
+  scanAnalytics.scans.push({
+    t: now.toISOString(),
+    hour: now.getHours(),
+    total: s.total, blocked: s.blocked, ownReply: s.ownReply,
+    colleague: s.colleague, suppressed: s.suppressed,
+    autoNoAction: s.autoNoAction, classified: s.classified
+  });
+  // keep last 500 scans
+  if(scanAnalytics.scans.length > 500) scanAnalytics.scans = scanAnalytics.scans.slice(-500);
+  Object.keys(scanAnalytics.totals).forEach(function(k){ scanAnalytics.totals[k] += (s[k]||0); });
+  saveScanAnalytics();
+}
+
 // Thread tracking — a thread is "handled" once I've replied to it
 var handledThreads = {};
+var currentScreen = 'inbox';
 function loadHandledThreads(){
   try{ var s = localStorage.getItem('rina_handled_threads'); if(s) handledThreads = JSON.parse(s); }catch(e){}
 }
@@ -1751,9 +1813,56 @@ function showUsageDetail(){
     '</div>' +
     '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--t3);margin-bottom:6px;">Last 7 days</div>' +
     (rows || '<div style="font-size:11px;color:var(--t3);">No usage yet.</div>') +
+    buildInsightsSection() +
     '<div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.5;">Estimated from token usage at standard API prices. Actual Anthropic billing may differ.</div>' +
     '<button class="btn" style="margin-top:12px;font-size:11px;" onclick="resetUsage()">Reset counter</button>';
   document.getElementById('usage-detail').style.display = 'flex';
+}
+
+function buildInsightsSection(){
+  var t = scanAnalytics.totals;
+  if(!t || t.total === 0){
+    return '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--b1);"><div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--t3);margin-bottom:6px;">Email pattern insights</div><div style="font-size:11px;color:var(--t3);">No scan data yet. Keep the app open during your workday and this will fill in.</div></div>';
+  }
+  var filtered = t.blocked + t.ownReply + t.colleague + t.suppressed + t.autoNoAction;
+  var pctFiltered = t.total ? Math.round(filtered/t.total*100) : 0;
+  var pctClassified = t.total ? Math.round(t.classified/t.total*100) : 0;
+
+  // Batch projection: classified emails grouped into batches of 10
+  var batchSize = 10;
+  var currentCalls = t.classified;
+  var batchedCalls = Math.ceil(t.classified / batchSize);
+  var saved = currentCalls - batchedCalls;
+  var savedPct = currentCalls ? Math.round(saved/currentCalls*100) : 0;
+
+  // Hour distribution (busiest hours)
+  var byHour = {};
+  scanAnalytics.scans.forEach(function(s){ byHour[s.hour] = (byHour[s.hour]||0) + s.total; });
+  var peakHour = null, peakVal = 0;
+  Object.keys(byHour).forEach(function(h){ if(byHour[h] > peakVal){ peakVal = byHour[h]; peakHour = h; } });
+
+  var html = '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--b1);">';
+  html += '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--t3);margin-bottom:8px;">Email pattern insights</div>';
+  html += '<div style="font-size:11.5px;color:var(--t2);line-height:1.7;">';
+  html += 'Total emails seen: <b style="color:var(--t1);">' + t.total + '</b><br>';
+  html += 'Filtered for free (no API): <b style="color:#1A9D5C;">' + filtered + '</b> (' + pctFiltered + '%)<br>';
+  html += '<span style="padding-left:10px;color:var(--t3);">• Colleagues: ' + t.colleague + ' · Own replies: ' + t.ownReply + ' · Blocked: ' + t.blocked + '<br>';
+  html += '<span style="padding-left:10px;color:var(--t3);">• Suppressed: ' + t.suppressed + ' · Auto noise: ' + t.autoNoAction + '</span><br>';
+  html += 'Sent to classification: <b style="color:#E0651C;">' + t.classified + '</b> (' + pctClassified + '%)';
+  html += '</div>';
+  if(peakHour !== null){
+    html += '<div style="font-size:11px;color:var(--t3);margin-top:8px;">Busiest hour so far: <b style="color:var(--t2);">' + peakHour + ':00–' + (parseInt(peakHour)+1) + ':00</b> (' + peakVal + ' emails)</div>';
+  }
+  // Batch projection box
+  html += '<div style="margin-top:12px;background:var(--nvl);border-radius:9px;padding:11px;">';
+  html += '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--nvt);font-weight:600;margin-bottom:5px;">Batch classification projection</div>';
+  html += '<div style="font-size:11.5px;color:var(--t2);line-height:1.6;">';
+  html += 'Classified emails used <b>' + currentCalls + '</b> individual API calls.<br>';
+  html += 'Batching 10/call would use <b>' + batchedCalls + '</b> calls — ';
+  html += '<b style="color:#1A9D5C;">' + savedPct + '% fewer</b> (' + saved + ' saved).';
+  html += '</div></div>';
+  html += '</div>';
+  return html;
 }
 function closeUsageDetail(){ document.getElementById('usage-detail').style.display = 'none'; }
 function resetUsage(){
@@ -3454,6 +3563,14 @@ function renderSideNotes(){
   var leftEl  = document.getElementById('side-notes-left');
   var rightEl = document.getElementById('side-notes-right');
   if(!leftEl || !rightEl) return;
+  // Only show side notes on the Inbox screen — they overlap wider screens otherwise
+  if(currentScreen !== 'inbox'){
+    leftEl.classList.add('hide-notes');
+    rightEl.classList.add('hide-notes');
+    return;
+  }
+  leftEl.classList.remove('hide-notes');
+  rightEl.classList.remove('hide-notes');
 
   var now = new Date();
   var active = state.reminders.filter(function(r){ return !r.dismissed; });
