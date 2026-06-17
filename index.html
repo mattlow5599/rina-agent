@@ -2079,7 +2079,11 @@ function renderEmails(){
       '<div class="etm">' + time + '</div>' +
       dot +
       '<button onclick="summariseEmail(\'' + e.id + '\',\'' + summaryId + '\')" title="Summarise" style="background:none;border:1px solid var(--b2);border-radius:4px;cursor:pointer;color:var(--t3);font-size:10px;padding:2px 6px;white-space:nowrap;" onmouseover="this.style.borderColor=\'var(--nv)\';this.style.color=\'var(--nvt)\'" onmouseout="this.style.borderColor=\'var(--b2)\';this.style.color=\'var(--t3)\'">✦ Brief</button>' +
-      '<button onclick="handleDismissClick(this)" title="Dismiss" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:14px;padding:2px 4px;line-height:1;border-radius:4px;" onmouseover="this.style.color=\'#B91C1C\'" onmouseout="this.style.color=\'var(--t3)\'">✕</button>' +
+      (isFyiEmail
+        ? '<button onclick="handleDismissClick(this,\'ignore\')" title="Dismiss" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:14px;padding:2px 4px;line-height:1;border-radius:4px;" onmouseover="this.style.color=\'#B91C1C\'" onmouseout="this.style.color=\'var(--t3)\'">✕</button>'
+        : '<button onclick="handleDismissClick(this,\'handled\')" title="I&#39;ve handled this (resurfaces if client replies)" style="background:none;border:1px solid #1A9D5C;border-radius:4px;cursor:pointer;color:#1A9D5C;font-size:10px;padding:2px 7px;white-space:nowrap;">✓ Handled</button>' +
+          '<button onclick="handleDismissClick(this,\'ignore\')" title="Ignore — no action needed (won&#39;t come back)" style="background:none;border:1px solid var(--b2);border-radius:4px;cursor:pointer;color:var(--t3);font-size:10px;padding:2px 7px;white-space:nowrap;" onmouseover="this.style.borderColor=\'#B91C1C\';this.style.color=\'#B91C1C\'" onmouseout="this.style.borderColor=\'var(--b2)\';this.style.color=\'var(--t3)\'">✕ Ignore</button>'
+      ) +
       '</div>' +
       '<div id="' + summaryId + '" style="display:none;padding:10px 14px 12px;border-top:1px solid var(--b1);background:var(--bg2);font-size:12px;color:var(--t2);line-height:1.7;"></div>' +
       '</div>';
@@ -2683,31 +2687,41 @@ function renderCompleted(){
   }).join('');
 }
 
-function handleDismissClick(btn){
-  // Walk up to find the card element with data-email-id
+function handleDismissClick(btn, mode){
   var card = btn;
   while(card && !card.dataset.emailId){
     card = card.parentElement;
   }
   if(card && card.dataset.emailId){
-    dismissEmail(card.dataset.emailId);
+    dismissEmail(card.dataset.emailId, mode || 'ignore');
   }
 }
 
-function dismissEmail(id){
-  // Mark ALL emails with this id as none (handles accidental duplicate IDs)
+function dismissEmail(id, mode){
+  mode = mode || 'ignore';
   var matched = state.emails.filter(function(e){ return e.id === id; });
   matched.forEach(function(email){
     email.scenario = 'none';
     email.isRead = true;
   });
+
   if(matched.length){
-    var subj = normaliseSubject(matched[0].subject || '');
-    if(subj && state.suppressedSubjects.indexOf(subj) === -1){
-      state.suppressedSubjects.push(subj);
-      saveSuppressedSubjects();
+    var subj = matched[0].subject || '';
+    if(mode === 'handled'){
+      // You've dealt with it. Mark the thread handled so it drops out now,
+      // but DON'T suppress the subject — if the client replies, it resurfaces.
+      markThreadHandled(subj);
+    } else {
+      // Ignore — never needed action. Suppress the subject so future emails
+      // with this subject are filtered for free (no API cost).
+      var norm = normaliseSubject(subj);
+      if(norm && state.suppressedSubjects.indexOf(norm) === -1){
+        state.suppressedSubjects.push(norm);
+        saveSuppressedSubjects();
+      }
     }
   }
+
   var idx = state.workflows.findIndex(function(w){ return w.emailId === id; });
   if(idx !== -1){ state.actioned++; state.workflows.splice(idx, 1); }
   dismissNotifByEmailId(id);
@@ -2715,6 +2729,7 @@ function dismissEmail(id){
   updateStats();
   renderEmails();
   renderWorkflows();
+  showToast(mode === 'handled' ? 'Marked handled — will resurface if the client replies' : 'Ignored — won\'t show again');
 }
 
 function normaliseSubject(subj){
