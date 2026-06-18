@@ -1055,6 +1055,7 @@ window.onload = function(){
   try { loadUsage(); updateUsageIndicator(); } catch(e){}
   try { loadScanAnalytics(); } catch(e){}
   try { loadWatchedVessels(); } catch(e){}
+  try { loadPushedIds(); } catch(e){}
   try { loadCompleted(); } catch(e){}
   try { loadReminders(); } catch(e){}
   try { loadTemplates(); } catch(e){}
@@ -1660,8 +1661,11 @@ function scanNow(){
       saveEmailsLocally();
       renderEmails();
       updateStats();
-      createNotifications(classified.filter(function(e){ return e.scenario !== 'none'; }));
+      var actionableClassified = classified.filter(function(e){ return e.scenario !== 'none'; });
+      createNotifications(actionableClassified);
       renderNotifications();
+      // Send rich phone push ONLY for classified emails that need review
+      sendClassifiedPushes(actionableClassified);
       scheduleSyncToDropbox();
       sendConfigToServiceWorker();
     });
@@ -3566,6 +3570,57 @@ function loadBlockedSenders(){
 // ── Web Push subscription ─────────────────────────────────────────────────────
 var VAPID_PUBLIC_KEY = 'BGEmv3JcY0VhXZuOJMxpoJIvA8jP6oBq5S9tzpaNSJQD1b4O7XKh6v-_6asRZ-oy_5wAyQ6pvwgmYkQp8xcAM8U';
 var PUSH_ENDPOINT = 'https://rinaworker.matt-low5599.workers.dev/push-subscribe';
+var PUSH_SEND_ENDPOINT = 'https://rinaworker.matt-low5599.workers.dev/push-send';
+
+// Track which email IDs we've already pushed, so re-scans don't re-notify
+var pushedIds = [];
+function loadPushedIds(){ try{ var s=localStorage.getItem('rina_pushed_ids'); if(s) pushedIds=JSON.parse(s); }catch(e){} }
+function savePushedIds(){ try{ localStorage.setItem('rina_pushed_ids', JSON.stringify(pushedIds.slice(-500))); }catch(e){} }
+
+// Build a clear, action-oriented notification body for a classified email
+var SCENARIO_LABEL = {
+  survey:    'Survey request',
+  plan:      'Plan approval',
+  extension: 'Extension request',
+  misc:      'Enquiry',
+  testing:   'Testing job',
+  unclear:   'Needs your judgement',
+  flag:      'Requires attention'
+};
+function buildPushBody(e){
+  var who = e.client_name || getFromDisplay(e) || 'Unknown sender';
+  var label = SCENARIO_LABEL[e.scenario] || 'Needs review';
+  // Prefer the AI summary; trim to a notification-friendly length
+  var detail = e.requestSummary || e.subject || '';
+  if(detail.length > 140) detail = detail.slice(0,137) + '…';
+  var bits = [];
+  if(e.vessel_name) bits.push(e.vessel_name);
+  if(e.survey_date) bits.push(e.survey_date);
+  var metaSuffix = bits.length ? ('\n' + bits.join(' · ')) : '';
+  // Title shows what kind of action; body shows who + what they want
+  return { label: label, who: who, body: who + ' — ' + detail + metaSuffix };
+}
+
+function sendClassifiedPushes(emails){
+  if(!emails || !emails.length) return;
+  emails.forEach(function(e){
+    if(!e || e.scenario === 'none') return;
+    if(pushedIds.indexOf(e.id) !== -1) return; // already pushed
+    pushedIds.push(e.id);
+    var info = buildPushBody(e);
+    var isMPA = !!e.isMPA;
+    var watched = matchedWatchVessel(e);
+    var title = isMPA ? '⚑ MPA — ' + info.label
+              : watched ? '★ ' + info.label + ' (' + watched + ')'
+              : info.label;
+    fetch(PUSH_SEND_ENDPOINT, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ title: title, body: info.body, mpa: isMPA })
+    }).catch(function(){});
+  });
+  savePushedIds();
+}
 
 function urlBase64ToUint8Array(base64String){
   var padding = '='.repeat((4 - base64String.length % 4) % 4);

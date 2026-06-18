@@ -207,7 +207,7 @@ self.addEventListener('push', function(e){
   try { if(e.data) payload = Object.assign(payload, e.data.json()); } catch(err){
     try { payload.body = e.data.text(); } catch(e2){}
   }
-  var title = payload.mpa ? '\u2691 MPA — Action required' : (payload.title || 'RINA Agent');
+  var title = payload.title || (payload.mpa ? '\u2691 MPA — Action required' : 'RINA Agent');
   e.waitUntil(
     self.registration.showNotification(title, {
       body:               payload.body || 'New email',
