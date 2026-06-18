@@ -59,7 +59,7 @@ async function registerPeriodicSync(){
   try {
     if('periodicSync' in self.registration){
       await self.registration.periodicSync.register('check-emails', {
-        minInterval: 5 * 60 * 1000 // 5 minutes
+        minInterval: 3 * 60 * 1000 // request every 3 minutes (browser may throttle)
       });
       console.log('[SW] Periodic sync registered');
     }
@@ -200,6 +200,25 @@ async function checkForNewEmails(){
     console.warn('[SW] checkForNewEmails error:', err.message);
   }
 }
+
+// ── Web Push: show notification when worker pushes a message ───────────────────
+self.addEventListener('push', function(e){
+  var payload = { title: 'RINA Agent', body: 'New email in the shared mailbox', mpa: false };
+  try { if(e.data) payload = Object.assign(payload, e.data.json()); } catch(err){
+    try { payload.body = e.data.text(); } catch(e2){}
+  }
+  var title = payload.mpa ? '\u2691 MPA — Action required' : (payload.title || 'RINA Agent');
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body:               payload.body || 'New email',
+      tag:                payload.tag || ('rina-push-' + Date.now()),
+      requireInteraction: !!payload.mpa,
+      vibrate:            payload.mpa ? [300,100,300,100,300] : [200,100,200],
+      badge:              './manifest-icon.png',
+      data:               { url: self.registration.scope }
+    })
+  );
+});
 
 // ── Notification click ────────────────────────────────────────────────────────
 self.addEventListener('notificationclick', function(e){

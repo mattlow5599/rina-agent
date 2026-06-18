@@ -158,6 +158,8 @@ body{background:var(--bg2);min-height:100vh;min-height:100dvh;display:flex;align
 .ncolor{width:30px;height:30px;border-radius:7px;cursor:pointer;border:2px solid transparent;transition:transform 0.12s;}
 .ncolor:hover{transform:scale(1.12);}
 .ncolor.sel{border-color:var(--nv);box-shadow:0 0 0 2px var(--bg1),0 0 0 4px var(--nv);}
+.rtype-btn{flex:1;font-size:11.5px;padding:8px 10px;border-radius:var(--radius-md);border:1px solid var(--b2);background:var(--bg2);color:var(--t2);cursor:pointer;font-family:inherit;transition:all 0.14s;}
+.rtype-btn.on{background:var(--nv);color:#fff;border-color:var(--nv);font-weight:600;}
 
 @media (max-width: 820px){
   body{padding:0;align-items:stretch;}
@@ -646,6 +648,15 @@ body.dark .draft-ph{color:#FAC775;}
                 <button class="btn btn-n" onclick="addBlockedSender()">Block</button>
               </div>
             </div>
+            <div>
+              <div class="slbl" style="margin-bottom:4px;">🚢 Vessel watch-list</div>
+              <div style="font-size:10px;color:var(--t3);margin-bottom:6px;">Emails mentioning these vessels are flagged with a ★ and sorted to the top.</div>
+              <div id="watched-vessels-list" style="margin-bottom:6px;"></div>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="watch-vessel-input" placeholder="Add vessel name (e.g. NJ CALLISTO)..." style="padding:7px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg1);color:var(--t1);font-family:inherit;font-size:12px;flex:1;" onkeydown="if(event.key==='Enter'){addWatchedVessel(document.getElementById('watch-vessel-input').value);}" />
+                <button class="btn btn-n" onclick="addWatchedVessel(document.getElementById('watch-vessel-input').value)">Add</button>
+              </div>
+            </div>
             <div style="display:flex;gap:8px;">
               <button class="btn btn-n" onclick="saveSettings()">Save settings</button>
               <button class="btn" onclick="testConnection()">Test Dropbox connection</button>
@@ -654,6 +665,8 @@ body.dark .draft-ph{color:#FAC775;}
             <div style="padding:10px 12px;background:var(--bg2);border-radius:var(--radius-md);border:1px solid var(--b1);">
               <div style="font-size:11px;font-weight:600;color:var(--t2);margin-bottom:4px;">Push notifications</div>
               <div id="notif-permission-status" style="font-size:11px;"></div>
+              <button class="btn btn-n" style="margin-top:8px;font-size:11px;" onclick="enablePushNotifications()">Enable phone push notifications</button>
+              <div id="push-status" style="font-size:10px;color:var(--t3);margin-top:6px;"></div>
             </div>
             <div style="padding:10px 12px;background:var(--nvl);border-radius:var(--radius-md);font-size:11px;color:var(--nvt);line-height:1.6;">
               <strong>On/Off leave toggle:</strong> Click the power button next to your name in the sidebar to pause the agent. Power Automate keeps writing emails to Dropbox, but no notifications are triggered until you resume.
@@ -713,7 +726,14 @@ body.dark .draft-ph{color:#FAC775;}
             <div style="font-size:11px;color:var(--t3);margin-bottom:4px;">Note</div>
             <textarea id="reminder-note" rows="3" placeholder="Enter your reminder note..." style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg2);color:var(--t1);font-family:inherit;font-size:12px;resize:vertical;"></textarea>
           </div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <div style="margin-bottom:10px;">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:5px;">Type</div>
+            <div style="display:flex;gap:8px;">
+              <button type="button" id="rtype-note" class="rtype-btn on" onclick="setReminderType('note')">📌 Sticky note only</button>
+              <button type="button" id="rtype-timed" class="rtype-btn" onclick="setReminderType('timed')">⏰ Set date &amp; time</button>
+            </div>
+          </div>
+          <div id="reminder-datetime" style="display:none;gap:8px;margin-bottom:10px;">
             <div style="flex:1;">
               <div style="font-size:11px;color:var(--t3);margin-bottom:4px;">Date</div>
               <input type="date" id="reminder-date" style="width:100%;padding:8px 10px;border:1px solid var(--b2);border-radius:var(--radius-md);background:var(--bg2);color:var(--t1);font-family:inherit;font-size:12px;" />
@@ -875,6 +895,7 @@ var state = {
   surveyors: ['Roderick','Gilbert','Jiahui','Zani','Chris','Choy','Sufian','Jiang','Haibo','David','Rawat','Glenn','Lixiang','Nicholas','Faris','Ibrahim','Mahadir','Jerry'],
   trainees: ['Jerry','Mahadir'],
   suppressedSubjects: [],
+  watchedVessels: [],
   templateFilter: 'all',
   cfg: { sonnetKey:'', haikuKey:'', dropboxRefreshToken:'', mailbox:'singapore.marine@rina.org', myEmail:'zuyi.low@rina.org', calendar:'RINA Singapore Marine' },
   currentFilter: 'all',
@@ -894,7 +915,9 @@ function saveEmailsLocally(){
         id:e.id, subject:e.subject, from:e.from, to:e.to, cc:e.cc,
         received:e.received||e.receivedDateTime, scenario:e.scenario,
         vessel_name:e.vessel_name, survey_date:e.survey_date, client_name:e.client_name,
-        requestSummary:e.requestSummary, isMPA:e.isMPA, isRead:e.isRead,
+        requestSummary:e.requestSummary, keyDetails:e.keyDetails,
+        actionNeeded:e.actionNeeded, actionReason:e.actionReason,
+        isMPA:e.isMPA, isRead:e.isRead,
         body: body
       };
     });
@@ -907,7 +930,7 @@ function saveEmailsLocally(){
         return { id:e.id, subject:e.subject, from:e.from, to:e.to, cc:e.cc,
           received:e.received||e.receivedDateTime, scenario:e.scenario,
           vessel_name:e.vessel_name, survey_date:e.survey_date, client_name:e.client_name,
-          requestSummary:e.requestSummary, isMPA:e.isMPA, isRead:e.isRead, body:body };
+          requestSummary:e.requestSummary, keyDetails:e.keyDetails, isMPA:e.isMPA, isRead:e.isRead, body:body };
       });
       localStorage.setItem('rina_emails', JSON.stringify(trimmed));
     } catch(e2){}
@@ -944,6 +967,7 @@ function syncToDropbox(){
     reminders:          state.reminders,
     templates:          state.templates,
     suppressedSubjects: state.suppressedSubjects,
+    watchedVessels:     state.watchedVessels,
     actioned:           state.actioned,
     emailScenarios:     emailScenarios,
     updatedAt:          new Date().toISOString()
@@ -991,6 +1015,7 @@ function loadStateFromDropbox(){
     if(data.reminders          && Array.isArray(data.reminders))          state.reminders          = data.reminders;
     if(data.templates          && Array.isArray(data.templates))          state.templates          = data.templates;
     if(data.suppressedSubjects && Array.isArray(data.suppressedSubjects)) state.suppressedSubjects = data.suppressedSubjects;
+    if(data.watchedVessels && Array.isArray(data.watchedVessels)){ state.watchedVessels = data.watchedVessels; saveWatchedVessels(); }
     if(typeof data.actioned === 'number') state.actioned = data.actioned;
     // Restore email scenarios from Dropbox state (workflow/active states)
     if(data.emailScenarios && typeof data.emailScenarios === 'object'){
@@ -1029,6 +1054,7 @@ window.onload = function(){
   try { loadSeenClearedIds(); } catch(e){}
   try { loadUsage(); updateUsageIndicator(); } catch(e){}
   try { loadScanAnalytics(); } catch(e){}
+  try { loadWatchedVessels(); } catch(e){}
   try { loadCompleted(); } catch(e){}
   try { loadReminders(); } catch(e){}
   try { loadTemplates(); } catch(e){}
@@ -1152,7 +1178,7 @@ function nav(screenId, el){
     if(statEl) statEl.style.display = 'none';
   }
   if(screenId === 'surveyors') renderSurveyors();
-  if(screenId === 'settings'){ renderBlockedSenders(); renderSuppressedSubjects(); renderStartTimestamp(); updateNotifPermissionDisplay(); }
+  if(screenId === 'settings'){ renderBlockedSenders(); renderSuppressedSubjects(); renderStartTimestamp(); updateNotifPermissionDisplay(); renderWatchedVessels(); }
   if(screenId === 'completed') renderCompleted();
   if(screenId === 'reminders'){ renderReminders(); updateReminderBadge(); }
   if(screenId === 'templates') renderTemplates();
@@ -1905,6 +1931,7 @@ function classifyEmails(emails){
           return Object.assign({}, msg, {
             scenario:       scenario,
             requestSummary: parsed.request_summary || '',
+            keyDetails:     parsed.key_details || '',
             vessel_name:    parsed.vessel_name || '',
             survey_date:    parsed.date || '',
             client_name:    parsed.client_name || getFromDisplay(msg) || '',
@@ -1954,7 +1981,8 @@ function buildClassificationPrompt(msg){
     'Respond ONLY with valid JSON, no markdown:\n' +
     '{"scenario":"survey|plan|extension|misc|testing|unclear|none",' +
     '"action_needed":true/false,' +
-    '"request_summary":"one clear sentence: what is being asked / what the surveyor needs to do",' +
+    '"request_summary":"2-3 clear sentences capturing the FULL picture: who is asking, what they want, any specifics (vessel, dates, documents, deadlines), and exactly what the surveyor needs to do. Write it so the surveyor can decide whether to act WITHOUT opening the email.",' +
+    '"key_details":"the most important specifics as a short phrase list, e.g. \'Vessel: NJ CALLISTO | IMO 9497452 | ETA Singapore 14 Jun | Needs: SE renewal attendance\'. Empty string if none.",' +
     '"action_reason":"short reason why this does or does not need action",' +
     '"vessel_name":"vessel name if any",' +
     '"date":"date of attendance/ETA/due date in plain text if any",' +
@@ -1964,7 +1992,7 @@ function buildClassificationPrompt(msg){
     'To: ' + (msg.to || '') + '\n' +
     'Cc: ' + (msg.cc || '') + '\n' +
     'Subject: ' + (msg.subject || '') + '\n' +
-    'Body: ' + (msg.body || msg.bodyPreview || '').slice(0, 600);
+    'Body: ' + (msg.body || msg.bodyPreview || '').slice(0, 2000);
 }
 
 // ── Render emails ────────────────────────────────────────────────────────────
@@ -2025,6 +2053,9 @@ function renderEmails(){
   actionable.sort(function(a,b){
     if(a.isMPA && !b.isMPA) return -1;
     if(!a.isMPA && b.isMPA) return 1;
+    var aw = matchedWatchVessel(a) ? 1 : 0;
+    var bw = matchedWatchVessel(b) ? 1 : 0;
+    if(aw !== bw) return bw - aw; // watched vessels next
     return 0;
   });
 
@@ -2053,11 +2084,17 @@ function renderEmails(){
     var summaryId = 'summary-' + e.id.replace(/[^a-z0-9]/gi,'');
     // Request summary line — the key "what is this" signal
     var summaryLine = (!isFyiEmail && e.requestSummary)
-      ? '<div style="font-size:11px;color:var(--t2);margin-top:3px;line-height:1.45;background:var(--bg2);padding:5px 8px;border-radius:6px;border-left:2px solid ' + sc.border + ';">' + escHtml(e.requestSummary) + '</div>'
+      ? '<div style="font-size:11px;color:var(--t2);margin-top:3px;line-height:1.5;background:var(--bg2);padding:6px 9px;border-radius:6px;border-left:2px solid ' + sc.border + ';">' + escHtml(e.requestSummary) + '</div>'
+      : '';
+    var keyDetailsLine = (!isFyiEmail && e.keyDetails)
+      ? '<div style="font-size:10.5px;color:var(--t2);margin-top:4px;line-height:1.5;padding:5px 9px;background:' + sc.border + '0E;border-radius:6px;">' +
+        escHtml(e.keyDetails).replace(/\s\|\s/g,' <span style="color:var(--t3);">·</span> ') + '</div>'
       : '';
     var metaLine = '';
-    if(!isFyiEmail && (e.vessel_name || e.survey_date)){
+    var watchedV = !isFyiEmail ? matchedWatchVessel(e) : null;
+    if(!isFyiEmail && (e.vessel_name || e.survey_date || watchedV)){
       var bits = [];
+      if(watchedV) bits.push('<span style="color:#C2410C;font-weight:600;">★ Watch: ' + escHtml(watchedV) + '</span>');
       if(e.vessel_name) bits.push('🚢 ' + escHtml(e.vessel_name));
       if(e.survey_date) bits.push('📅 ' + escHtml(e.survey_date));
       metaLine = '<div style="font-size:10px;color:var(--t3);margin-top:3px;">' + bits.join('  ·  ') + '</div>';
@@ -2071,6 +2108,7 @@ function renderEmails(){
       '<div class="efr">' + escHtml(from) + '</div>' +
       '<div class="esub">' + escHtml(e.subject || '(no subject)') + '</div>' +
       summaryLine +
+      keyDetailsLine +
       metaLine +
       '<div class="etags">' + tags + '</div>' +
       '</div>' +
@@ -3525,6 +3563,94 @@ function loadBlockedSenders(){
   if(saved){ try{ var arr = JSON.parse(saved); arr.forEach(function(a){ if(!BLOCKED_SENDERS.includes(a)) BLOCKED_SENDERS.push(a); }); } catch(e){} }
 }
 
+// ── Web Push subscription ─────────────────────────────────────────────────────
+var VAPID_PUBLIC_KEY = 'BGEmv3JcY0VhXZuOJMxpoJIvA8jP6oBq5S9tzpaNSJQD1b4O7XKh6v-_6asRZ-oy_5wAyQ6pvwgmYkQp8xcAM8U';
+var PUSH_ENDPOINT = 'https://rinaworker.matt-low5599.workers.dev/push-subscribe';
+
+function urlBase64ToUint8Array(base64String){
+  var padding = '='.repeat((4 - base64String.length % 4) % 4);
+  var base64 = (base64String + padding).replace(/-/g,'+').replace(/_/g,'/');
+  var raw = atob(base64);
+  var arr = new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+function enablePushNotifications(){
+  var statusEl = document.getElementById('push-status');
+  function setStatus(msg){ if(statusEl) statusEl.textContent = msg; }
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+    setStatus('Push not supported here. On Android use Chrome and install the app to your home screen.');
+    return;
+  }
+  setStatus('Requesting permission…');
+  Notification.requestPermission().then(function(perm){
+    if(perm !== 'granted'){ setStatus('Notification permission denied. Enable it in site settings.'); return; }
+    return navigator.serviceWorker.ready.then(function(reg){
+      return reg.pushManager.getSubscription().then(function(existing){
+        if(existing) return existing;
+        return reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+      });
+    }).then(function(sub){
+      return fetch(PUSH_ENDPOINT, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ subscription: sub, user: state.cfg.myEmail || 'zuyi.low@rina.org' })
+      });
+    }).then(function(){
+      setStatus('✓ Phone push enabled — you\'ll get alerts even when the app is closed.');
+      showToast('Phone push notifications enabled');
+    });
+  }).catch(function(err){
+    setStatus('Could not enable push: ' + (err && err.message ? err.message : 'unknown error'));
+  });
+}
+
+// ── Vessel watch-list ─────────────────────────────────────────────────────────
+function loadWatchedVessels(){
+  try{ var s = localStorage.getItem('rina_watched_vessels'); if(s) state.watchedVessels = JSON.parse(s); }catch(e){}
+}
+function saveWatchedVessels(){
+  try{ localStorage.setItem('rina_watched_vessels', JSON.stringify(state.watchedVessels)); }catch(e){}
+  scheduleSyncToDropbox();
+}
+function addWatchedVessel(name){
+  name = (name||'').trim();
+  if(!name) return;
+  var exists = state.watchedVessels.some(function(v){ return v.toLowerCase() === name.toLowerCase(); });
+  if(!exists){ state.watchedVessels.push(name); saveWatchedVessels(); renderWatchedVessels(); renderEmails(); }
+  var inp = document.getElementById('watch-vessel-input'); if(inp) inp.value = '';
+}
+function removeWatchedVessel(name){
+  state.watchedVessels = state.watchedVessels.filter(function(v){ return v !== name; });
+  saveWatchedVessels(); renderWatchedVessels(); renderEmails();
+}
+function matchedWatchVessel(e){
+  if(!state.watchedVessels.length) return null;
+  var hay = ((e.subject||'') + ' ' + (e.vessel_name||'') + ' ' + (e.body||e.bodyPreview||'')).toLowerCase();
+  for(var i=0;i<state.watchedVessels.length;i++){
+    if(hay.indexOf(state.watchedVessels[i].toLowerCase()) !== -1) return state.watchedVessels[i];
+  }
+  return null;
+}
+function renderWatchedVessels(){
+  var el = document.getElementById('watched-vessels-list');
+  if(!el) return;
+  if(!state.watchedVessels.length){
+    el.innerHTML = '<div style="font-size:11px;color:var(--t3);">No vessels on your watch-list yet. Add vessels you\'re actively handling so their emails are flagged and prioritised.</div>';
+    return;
+  }
+  el.innerHTML = state.watchedVessels.map(function(v){
+    return '<div style="display:inline-flex;align-items:center;gap:6px;background:var(--nvl);color:var(--nvt);border-radius:20px;padding:5px 10px;font-size:12px;margin:0 6px 6px 0;">' +
+      '🚢 ' + escHtml(v) +
+      '<span onclick="removeWatchedVessel(\'' + escHtml(v).replace(/'/g,"\\'") + '\')" style="cursor:pointer;font-weight:700;opacity:0.6;">✕</span>' +
+      '</div>';
+  }).join('');
+}
+
 // ── REMINDERS ──────────────────────────────────────────────────────────────────
 function saveReminders(){ scheduleSyncToDropbox(); renderSideNotes(); }
 function loadReminders(){ try{var s=localStorage.getItem('rina_reminders');if(s)state.reminders=JSON.parse(s);}catch(e){} }
@@ -3680,26 +3806,47 @@ function showAddReminder(id){
     noteEl.value=r.note||'';
     dateEl.value=r.date||'';
     timeEl.value=r.time||'09:00';
+    setReminderType(r.date ? 'timed' : 'note');
   } else {
     titleEl.textContent='New reminder';
     editId.value='';
     noteEl.value='';
     dateEl.value=new Date().toISOString().split('T')[0];
     timeEl.value='09:00';
+    setReminderType('note');
   }
   form.style.display='block';
   form.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
+function setReminderType(type){
+  var dt = document.getElementById('reminder-datetime');
+  var noteBtn = document.getElementById('rtype-note');
+  var timedBtn = document.getElementById('rtype-timed');
+  if(type === 'timed'){
+    dt.style.display = 'flex';
+    timedBtn.classList.add('on'); noteBtn.classList.remove('on');
+  } else {
+    dt.style.display = 'none';
+    noteBtn.classList.add('on'); timedBtn.classList.remove('on');
+  }
+}
+
+function getReminderType(){
+  return document.getElementById('rtype-timed').classList.contains('on') ? 'timed' : 'note';
+}
+
 function saveReminder(){
   var note=document.getElementById('reminder-note').value.trim();
-  var date=document.getElementById('reminder-date').value;
-  var time=document.getElementById('reminder-time').value||'09:00';
+  var type=getReminderType();
+  var date=type==='timed' ? document.getElementById('reminder-date').value : '';
+  var time=type==='timed' ? (document.getElementById('reminder-time').value||'09:00') : '';
   var editId=document.getElementById('reminder-edit-id').value;
-  if(!note||!date){showToast('Please enter a note and date');return;}
+  if(!note){ showToast('Please enter a note'); return; }
+  if(type==='timed' && !date){ showToast('Please choose a date, or switch to sticky note only'); return; }
   if(editId){
     var r=state.reminders.find(function(x){return x.id===editId;});
-    if(r){r.note=note;r.date=date;r.time=time;r.dismissed=false;}
+    if(r){ r.note=note; r.date=date; r.time=time; r.dismissed=false; }
   } else {
     state.reminders.push({id:'r_'+Date.now(),note:note,date:date,time:time,dismissed:false,snoozedUntil:null});
   }
