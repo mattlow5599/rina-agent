@@ -110,10 +110,24 @@ body{background:var(--bg2);min-height:100vh;min-height:100dvh;display:flex;align
 .sidebar-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:90;}
 
 /* ── Side sticky note reminders (desktop wide screens only) ── */
-.side-notes{position:fixed;top:120px;width:195px;z-index:50;display:none;}
-.side-notes-left{left:calc(50% - 550px - 210px);}
-.side-notes-right{right:calc(50% - 550px - 210px);}
-@media (min-width:1340px){ .side-notes{display:block;} }
+.side-notes{position:fixed;top:120px;width:185px;z-index:50;display:none;}
+.side-notes-left{left:16px;}
+.side-notes-right{right:16px;}
+/* Very wide (external monitor): notes hug the centred app */
+@media (min-width:1620px){
+  .side-notes{display:block;width:190px;}
+  .side-notes-left{left:calc(50% - 550px - 205px);}
+  .side-notes-right{right:calc(50% - 550px - 205px);}
+  .pnote,.unote{width:180px;}
+}
+/* Laptop (room for slimmer notes at the window edges) */
+@media (min-width:1400px) and (max-width:1619px){
+  .side-notes{display:block;width:150px;}
+  .side-notes-left{left:10px;}
+  .side-notes-right{right:10px;}
+  .pnote,.unote{width:142px;}
+  .pnote .pn-text,.unote .un-text{font-size:11.5px;}
+}
 .side-notes.hide-notes{display:none !important;}
 .side-notes-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8A9DB0;margin-bottom:14px;padding-left:6px;display:flex;align-items:center;gap:6px;}
 .side-notes-title .c{width:7px;height:7px;border-radius:50%;}
@@ -155,6 +169,18 @@ body{background:var(--bg2);min-height:100vh;min-height:100dvh;display:flex;align
 .note-stack.stacked:hover .stack-item:not(:first-child){margin-top:14px;}
 .note-stack .stack-more{font-size:10px;color:#8A9DB0;text-align:center;margin-top:6px;font-weight:600;}
 .note-stack.stacked:hover .stack-more{display:none;}
+/* Inline reminders strip — only shown when side notes don't fit (narrow screens) */
+#inline-reminders{display:none;margin-bottom:14px;}
+@media (max-width:1399px){
+  #inline-reminders.has-items{display:block;}
+}
+.ir-wrap{background:var(--bg1);border:1px solid var(--b1);border-radius:var(--radius-md);padding:10px 12px;}
+.ir-head{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--t3);margin-bottom:8px;}
+.ir-row{display:flex;gap:8px;flex-wrap:wrap;}
+.ir-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:8px;font-size:11.5px;cursor:pointer;border:1px solid var(--b1);background:var(--bg2);color:var(--t2);}
+.ir-chip.due{background:linear-gradient(160deg,#27405F,#1B3047);color:#fff;border:none;}
+.ir-chip.overdue{background:linear-gradient(160deg,#7A3B1E,#5E2C14);color:#fff;border:none;}
+.ir-chip .ir-when{font-size:9.5px;opacity:0.7;}
 .ncolor{width:30px;height:30px;border-radius:7px;cursor:pointer;border:2px solid transparent;transition:transform 0.12s;}
 .ncolor:hover{transform:scale(1.12);}
 .ncolor.sel{border-color:var(--nv);box-shadow:0 0 0 2px var(--bg1),0 0 0 4px var(--nv);}
@@ -544,6 +570,7 @@ body.dark .draft-ph{color:#FAC775;}
           <div class="chip" onclick="filterEmails('testing',this)">Testing</div>
           <div class="chip" onclick="filterEmails('unclear',this)">Needs review</div>
         </div>
+        <div id="inline-reminders"></div>
         <div class="elist" id="email-list">
           <div style="padding:32px;text-align:center;color:var(--t3);font-size:12px;">
             No emails loaded yet. Click "Scan now" or configure your mailbox in Settings.
@@ -3758,6 +3785,8 @@ function renderSideNotes(){
   if(currentScreen !== 'inbox'){
     leftEl.classList.add('hide-notes');
     rightEl.classList.add('hide-notes');
+    var inlineOff = document.getElementById('inline-reminders');
+    if(inlineOff){ inlineOff.innerHTML=''; inlineOff.classList.remove('has-items'); }
     return;
   }
   leftEl.classList.remove('hide-notes');
@@ -3781,6 +3810,29 @@ function renderSideNotes(){
 
   leftEl.innerHTML  = upcoming.length ? buildPostitStack(upcoming) : '';
   rightEl.innerHTML = due.length ? buildUrgentStack(due) : '';
+
+  // Inline strip (shown on narrow screens where side notes don't fit)
+  var inlineEl = document.getElementById('inline-reminders');
+  if(inlineEl){
+    if(currentScreen === 'inbox' && (upcoming.length || due.length)){
+      var chips = '';
+      due.forEach(function(r){
+        var dt = new Date(r.date + 'T' + (r.time||'09:00'));
+        var over = dt < now && r.date !== now.toISOString().split('T')[0];
+        chips += '<div class="ir-chip ' + (over?'overdue':'due') + '" onclick="openNoteMenu(\'' + r.id + '\',event)">' +
+          (over?'⚠ ':'⏰ ') + escHtml(r.note||'') + ' <span class="ir-when">' + escHtml(fmtNoteDate(r)) + '</span></div>';
+      });
+      upcoming.forEach(function(r){
+        chips += '<div class="ir-chip" onclick="openNoteMenu(\'' + r.id + '\',event)">📌 ' + escHtml(r.note||'') +
+          (r.date ? ' <span class="ir-when">' + escHtml(fmtNoteDate(r)) + '</span>' : '') + '</div>';
+      });
+      inlineEl.innerHTML = '<div class="ir-wrap"><div class="ir-head">📋 Your reminders</div><div class="ir-row">' + chips + '</div></div>';
+      inlineEl.classList.add('has-items');
+    } else {
+      inlineEl.innerHTML = '';
+      inlineEl.classList.remove('has-items');
+    }
+  }
 }
 
 function fmtNoteDate(r){
