@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>RINA Agent</title>
+<!-- BUILD v2026-06-18-reminders-fix -->
+<meta name="rina-build" content="v18b">
+<script>console.log('RINA Agent build v18b loaded');</script>
 
 <!-- PWA manifest -->
 <link rel="manifest" href="./manifest.json">
@@ -113,12 +116,12 @@ body{background:var(--bg2);min-height:100vh;min-height:100dvh;display:flex;align
 .side-notes{position:fixed;top:120px;width:185px;z-index:50;display:none;}
 .side-notes-left{left:16px;}
 .side-notes-right{right:16px;}
-/* Side Post-it notes only on very wide screens where the app stays centred with real margins */
-@media (min-width:1680px){
-  .side-notes{display:block;width:190px;}
-  .side-notes-left{left:calc(50% - 550px - 205px);}
-  .side-notes-right{right:calc(50% - 550px - 205px);}
-  .pnote,.unote{width:180px;}
+/* Side Post-it notes when the window is wide enough for real margins */
+@media (min-width:1500px){
+  .side-notes{display:block;width:185px;}
+  .side-notes-left{left:calc(50% - 550px - 200px);}
+  .side-notes-right{right:calc(50% - 550px - 200px);}
+  .pnote,.unote{width:175px;}
 }
 .side-notes.hide-notes{display:none !important;}
 .side-notes-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8A9DB0;margin-bottom:14px;padding-left:6px;display:flex;align-items:center;gap:6px;}
@@ -161,9 +164,9 @@ body{background:var(--bg2);min-height:100vh;min-height:100dvh;display:flex;align
 .note-stack.stacked:hover .stack-item:not(:first-child){margin-top:14px;}
 .note-stack .stack-more{font-size:10px;color:#8A9DB0;text-align:center;margin-top:6px;font-weight:600;}
 .note-stack.stacked:hover .stack-more{display:none;}
-/* Inline reminders strip — shown when side notes don't comfortably fit */
+/* Inline reminders strip — shown when side notes don't fit */
 #inline-reminders{display:none;margin-bottom:14px;}
-@media (max-width:1619px){
+@media (max-width:1499px){
   #inline-reminders.has-items{display:block;}
 }
 .ir-wrap{background:var(--bg1);border:1px solid var(--b1);border-radius:var(--radius-md);padding:10px 12px;}
