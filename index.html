@@ -3602,24 +3602,10 @@ function buildPushBody(e){
 }
 
 function sendClassifiedPushes(emails){
-  if(!emails || !emails.length) return;
-  emails.forEach(function(e){
-    if(!e || e.scenario === 'none') return;
-    if(pushedIds.indexOf(e.id) !== -1) return; // already pushed
-    pushedIds.push(e.id);
-    var info = buildPushBody(e);
-    var isMPA = !!e.isMPA;
-    var watched = matchedWatchVessel(e);
-    var title = isMPA ? '⚑ MPA — ' + info.label
-              : watched ? '★ ' + info.label + ' (' + watched + ')'
-              : info.label;
-    fetch(PUSH_SEND_ENDPOINT, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ title: title, body: info.body, mpa: isMPA })
-    }).catch(function(){});
-  });
-  savePushedIds();
+  // Push is now sent server-side by the worker's /notify endpoint (A2-Smart),
+  // triggered by Power Automate at email arrival. The app no longer sends its
+  // own pushes, to avoid duplicate notifications. Kept as a no-op.
+  return;
 }
 
 function urlBase64ToUint8Array(base64String){
