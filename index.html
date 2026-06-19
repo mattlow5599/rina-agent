@@ -1004,12 +1004,8 @@ function syncToDropbox(){
   getDropboxAccessToken().then(function(token){
     return fetch(WORKER_BASE + '/dropbox-upload', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'x-dropbox-token': token,
-        'x-dropbox-path': '/RINA-Agent/state.json'
-      },
-      body: body
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token, path: '/RINA-Agent/state.json', content: body })
     });
   }).catch(function(e){ console.warn('State sync failed:', e.message); });
 }
