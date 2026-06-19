@@ -1081,6 +1081,7 @@ window.onload = function(){
   try { loadHandledThreads(); } catch(e){}
   try { loadSeenClearedIds(); } catch(e){}
   try { loadUsage(); updateUsageIndicator(); } catch(e){}
+  try { loadBudget(); } catch(e){}
   try { loadScanAnalytics(); } catch(e){}
   try { loadWatchedVessels(); } catch(e){}
   try { loadPushedIds(); } catch(e){}
@@ -1905,6 +1906,18 @@ function updateUsageIndicator(){
     var today = new Date().toISOString().split('T')[0];
     var todayCost = (usageData.byDay[today] && usageData.byDay[today].cost) || 0;
     el.textContent = '$' + todayCost.toFixed(2);
+    // Budget warning dot on the chip
+    var chip = document.getElementById('usage-indicator');
+    if(chip && MONTHLY_BUDGET_SGD > 0){
+      var month = today.slice(0,7);
+      var monthCost = ((usageData.byMonth[month] && usageData.byMonth[month].cost) || 0) * USD_TO_SGD;
+      var now = new Date();
+      var dim = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+      var proj = now.getDate() > 0 ? (monthCost / now.getDate()) * dim : monthCost;
+      if(proj >= MONTHLY_BUDGET_SGD) chip.style.boxShadow = '0 0 0 2px #DC2626';
+      else if(proj >= MONTHLY_BUDGET_SGD*0.8) chip.style.boxShadow = '0 0 0 2px #D97706';
+      else chip.style.boxShadow = '';
+    }
   }
 }
 function showUsageDetail(){
@@ -2007,6 +2020,69 @@ function setSgdRate(v){
   var r = parseFloat(v);
   if(r && r > 0){ USD_TO_SGD = r; try{ localStorage.setItem('rina_sgd_rate', String(r)); }catch(e){} renderUsageDashboard(); }
 }
+
+var MONTHLY_BUDGET_SGD = 0; // 0 = no budget set
+function loadBudget(){ try{ var b=localStorage.getItem('rina_budget_sgd'); if(b) MONTHLY_BUDGET_SGD=parseFloat(b)||0; }catch(e){} }
+function setMonthlyBudget(v){
+  var b = parseFloat(v);
+  MONTHLY_BUDGET_SGD = (b && b>0) ? b : 0;
+  try{ localStorage.setItem('rina_budget_sgd', String(MONTHLY_BUDGET_SGD)); }catch(e){}
+  renderUsageDashboard();
+}
+
+// Projected month-end cost from run-rate + optional budget cap
+function buildProjectionBudget(monthCostUsd){
+  var now = new Date();
+  var year = now.getFullYear(), mon = now.getMonth();
+  var daysInMonth = new Date(year, mon+1, 0).getDate();
+  var dayOfMonth = now.getDate();
+  // run-rate: average daily so far × days in month
+  var projUsd = dayOfMonth > 0 ? (monthCostUsd / dayOfMonth) * daysInMonth : monthCostUsd;
+  var projSgd = projUsd * USD_TO_SGD;
+  var monthSgd = monthCostUsd * USD_TO_SGD;
+
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">';
+
+  // Projection card
+  html += '<div style="background:linear-gradient(160deg,#27405F,#1B3047);color:#fff;border-radius:11px;padding:13px;">' +
+    '<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;opacity:0.7;">Projected month-end</div>' +
+    '<div style="font-size:20px;font-weight:700;margin-top:4px;">S$' + projSgd.toFixed(2) + '</div>' +
+    '<div style="font-size:10px;opacity:0.75;margin-top:1px;">at current run-rate · day ' + dayOfMonth + ' of ' + daysInMonth + '</div>' +
+    '</div>';
+
+  // Budget card
+  if(MONTHLY_BUDGET_SGD > 0){
+    var pctOfBudget = Math.round((monthSgd / MONTHLY_BUDGET_SGD) * 100);
+    var projPct = Math.round((projSgd / MONTHLY_BUDGET_SGD) * 100);
+    var barColor = projPct >= 100 ? '#DC2626' : (projPct >= 80 ? '#D97706' : '#1A9D5C');
+    var warn = '';
+    if(projPct >= 100) warn = '⚠ Projected to exceed budget';
+    else if(projPct >= 80) warn = '⚠ Approaching budget';
+    else warn = '✓ On track';
+    html += '<div style="background:var(--bg2);border-radius:11px;padding:13px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--t3);">Monthly budget</div>' +
+        '<input type="number" step="1" value="' + MONTHLY_BUDGET_SGD + '" onchange="setMonthlyBudget(this.value)" style="width:64px;padding:3px 6px;border:1px solid var(--b2);border-radius:6px;background:var(--bg1);color:var(--t1);font-size:11px;text-align:right;" />' +
+      '</div>' +
+      '<div style="font-size:14px;font-weight:700;color:var(--t1);margin-top:6px;">S$' + monthSgd.toFixed(2) + ' <span style="font-size:10px;font-weight:400;color:var(--t3);">of S$' + MONTHLY_BUDGET_SGD.toFixed(0) + ' (' + pctOfBudget + '%)</span></div>' +
+      '<div style="height:7px;background:var(--b1);border-radius:4px;margin-top:7px;overflow:hidden;">' +
+        '<div style="height:100%;width:' + Math.min(pctOfBudget,100) + '%;background:' + barColor + ';border-radius:4px;"></div>' +
+      '</div>' +
+      '<div style="font-size:10px;color:' + barColor + ';font-weight:600;margin-top:5px;">' + warn + '</div>' +
+      '</div>';
+  } else {
+    html += '<div style="background:var(--bg2);border-radius:11px;padding:13px;display:flex;flex-direction:column;justify-content:center;">' +
+      '<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--t3);margin-bottom:6px;">Monthly budget</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;">' +
+        '<span style="font-size:11px;color:var(--t2);">S$</span>' +
+        '<input type="number" step="1" placeholder="e.g. 10" onchange="setMonthlyBudget(this.value)" style="width:80px;padding:5px 8px;border:1px solid var(--b2);border-radius:7px;background:var(--bg1);color:var(--t1);font-size:12px;" />' +
+      '</div>' +
+      '<div style="font-size:10px;color:var(--t3);margin-top:5px;">Set a cap to get an alert as you approach it.</div>' +
+      '</div>';
+  }
+  html += '</div>';
+  return html;
+}
 function fmtMoney(usd){
   var sgd = usd * USD_TO_SGD;
   return '<span style="font-weight:700;">$' + usd.toFixed(usd<1?3:2) + '</span> <span style="color:var(--t3);font-size:0.85em;">USD</span> · <span style="font-weight:700;color:#1A9D5C;">S$' + sgd.toFixed(sgd<1?3:2) + '</span>';
@@ -2042,6 +2118,9 @@ function renderUsageDashboard(){
   html += usageCard('This month', monthData.cost, monthData.calls);
   html += usageCard('All time', usageData.cost||0, usageData.calls||0);
   html += '</div>';
+
+  // ----- projection + budget -----
+  html += buildProjectionBudget(monthData.cost);
 
   // ----- cost by source (pie) -----
   html += '<div style="background:var(--bg1);border:1px solid var(--b1);border-radius:12px;padding:16px;margin-bottom:14px;">';
