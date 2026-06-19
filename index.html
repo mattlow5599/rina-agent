@@ -1002,17 +1002,12 @@ function syncToDropbox(){
   };
   var body = JSON.stringify(payload);
   getDropboxAccessToken().then(function(token){
-    return fetch('https://content.dropboxapi.com/2/files/upload', {
+    return fetch(WORKER_BASE + '/dropbox-upload', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + token,
         'Content-Type': 'application/octet-stream',
-        'Dropbox-API-Arg': JSON.stringify({
-          path: '/RINA-Agent/state.json',
-          mode: 'overwrite',
-          autorename: false,
-          mute: true
-        })
+        'x-dropbox-token': token,
+        'x-dropbox-path': '/RINA-Agent/state.json'
       },
       body: body
     });
@@ -1534,12 +1529,11 @@ function getDropboxAccessToken(){
 // ── Dropbox API ───────────────────────────────────────────────────────────────
 function dropboxRead(filename){
   return getDropboxAccessToken().then(function(token){
-    return fetch('https://content.dropboxapi.com/2/files/download', {
+    // Route through the worker to avoid browser CORS on content.dropboxapi.com
+    return fetch(WORKER_BASE + '/dropbox-download', {
       method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + token,
-        'Dropbox-API-Arg': JSON.stringify({ path: '/RINA-Agent/' + filename })
-      }
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token, path: '/RINA-Agent/' + filename })
     });
   }).then(function(r){
     if(!r.ok) throw new Error('Dropbox error ' + r.status + ' reading ' + filename);
@@ -1799,6 +1793,7 @@ function recordScanStats(s){
 // Thread tracking — a thread is "handled" once I've replied to it
 var handledThreads = {};
 var currentScreen = 'inbox';
+var WORKER_BASE = 'https://rinaworker.matt-low5599.workers.dev';
 function loadHandledThreads(){
   try{ var s = localStorage.getItem('rina_handled_threads'); if(s) handledThreads = JSON.parse(s); }catch(e){}
 }
