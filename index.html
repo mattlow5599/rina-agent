@@ -711,22 +711,6 @@ body.dark .draft-ph{color:#FAC775;}
               <div style="font-size:10px;color:var(--t3);margin-top:4px;">Emails with these subjects are silently ignored. Dismissing an inbox email adds it here automatically.</div>
             </div>
           </div>
-        </div>
-      </div>
-
-    </div><!-- /content -->
-
-    <!-- Confirm overlay -->
-    <div class="confirm-overlay" id="confirm-overlay">
-      <div class="confirm-box">
-        <div class="confirm-title" id="confirm-title">Dismiss this notification?</div>
-        <div class="confirm-sub" id="confirm-sub">This will be removed from your list.</div>
-        <div class="confirm-row">
-          <button class="cbtn" onclick="hideConfirm()">Cancel</button>
-          <button class="cbtn cbtn-del" id="confirm-ok" onclick="hideConfirm()">Confirm</button>
-        </div>
-      </div>
-    </div>
 
       <!-- COMPLETED -->
       <div class="screen" id="screen-completed">
@@ -839,6 +823,20 @@ body.dark .draft-ph{color:#FAC775;}
           </div>
         </div>
       </div>
+
+    </div><!-- /content -->
+
+    <!-- Confirm overlay -->
+    <div class="confirm-overlay" id="confirm-overlay">
+      <div class="confirm-box">
+        <div class="confirm-title" id="confirm-title">Dismiss this notification?</div>
+        <div class="confirm-sub" id="confirm-sub">This will be removed from your list.</div>
+        <div class="confirm-row">
+          <button class="cbtn" onclick="hideConfirm()">Cancel</button>
+          <button class="cbtn cbtn-del" id="confirm-ok" onclick="hideConfirm()">Confirm</button>
+        </div>
+      </div>
+    </div>
 
   </div><!-- /main -->
 </div><!-- /app -->
