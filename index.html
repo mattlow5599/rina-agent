@@ -478,6 +478,10 @@ body.dark .draft-ph{color:#FAC775;}
         <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         Templates
       </div>
+      <div class="ni" onclick="nav('usage',this)" data-icon="chart" data-title="Usage &amp; cost" data-sub="API spend, breakdown and trends">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Usage &amp; cost
+      </div>
     </div>
 
     <div class="ng">
@@ -528,7 +532,7 @@ body.dark .draft-ph{color:#FAC775;}
         </div>
       </div>
       <div class="tb-r">
-        <div class="usage-chip" id="usage-indicator" onclick="showUsageDetail()" title="Estimated API usage today — tap for details">
+        <div class="usage-chip" id="usage-indicator" onclick="nav('usage',document.querySelector('.ni[data-icon=&quot;chart&quot;]'))" title="View usage &amp; cost dashboard">
           <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           <span id="usage-today">$0.00</span>
         </div>
@@ -786,6 +790,10 @@ body.dark .draft-ph{color:#FAC775;}
       </div>
 
       <!-- TEMPLATES -->
+      <div class="screen" id="screen-usage">
+        <div id="usage-dashboard"></div>
+      </div>
+
       <div class="screen" id="screen-templates">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
           <div class="slbl">Email templates</div>
@@ -1205,6 +1213,7 @@ function nav(screenId, el){
   if(screenId === 'completed') renderCompleted();
   if(screenId === 'reminders'){ renderReminders(); updateReminderBadge(); }
   if(screenId === 'templates') renderTemplates();
+  if(screenId === 'usage'){ fetchNotificationCosts(function(){ renderUsageDashboard(); }); renderUsageDashboard(); }
   if(screenId === 'calview'){ var t=new Date().toISOString().split('T')[0]; document.getElementById('calview-date').value=t; }
   closeSidebar();
 }
@@ -1813,32 +1822,83 @@ var MODEL_PRICING = {
   'claude-haiku-4-5-20251001': { in: 1.00,  out: 5.00 },
   'claude-sonnet-4-6':         { in: 3.00,  out: 15.00 }
 };
-var usageData = { calls:0, inTokens:0, outTokens:0, cost:0, byDay:{} };
+// USD → SGD conversion rate (editable in the dashboard)
+var USD_TO_SGD = 1.35;
+
+var usageData = {
+  calls:0, inTokens:0, outTokens:0, cost:0,
+  byDay:{},     // 'YYYY-MM-DD' -> {calls, cost, in, out}
+  byHour:{},    // '0'..'23'    -> {calls, cost}
+  byMonth:{},   // 'YYYY-MM'    -> {calls, cost}
+  bySource:{}   // 'classification'|'brief'|'draft'|'refine'|'notification' -> {calls, cost}
+};
 
 function loadUsage(){
   try{ var s = localStorage.getItem('rina_usage'); if(s) usageData = JSON.parse(s); }catch(e){}
   if(!usageData.byDay) usageData.byDay = {};
+  if(!usageData.byHour) usageData.byHour = {};
+  if(!usageData.byMonth) usageData.byMonth = {};
+  if(!usageData.bySource) usageData.bySource = {};
+  try{ var r = localStorage.getItem('rina_sgd_rate'); if(r) USD_TO_SGD = parseFloat(r) || 1.35; }catch(e){}
 }
 function saveUsage(){
   try{ localStorage.setItem('rina_usage', JSON.stringify(usageData)); }catch(e){}
 }
-function recordUsage(model, data){
+function recordUsage(model, data, source){
   try{
     if(!data || !data.usage) return;
     var inTok  = data.usage.input_tokens  || 0;
     var outTok = data.usage.output_tokens || 0;
     var price  = MODEL_PRICING[model] || MODEL_PRICING['claude-sonnet-4-6'];
     var cost   = (inTok/1e6)*price.in + (outTok/1e6)*price.out;
+    source = source || 'other';
+    var now = new Date();
+    var day = now.toISOString().split('T')[0];
+    var month = day.slice(0,7);
+    var hour = String(now.getHours());
+
     usageData.calls++;
     usageData.inTokens  += inTok;
     usageData.outTokens += outTok;
     usageData.cost      += cost;
-    var day = new Date().toISOString().split('T')[0];
-    if(!usageData.byDay[day]) usageData.byDay[day] = { calls:0, cost:0 };
-    usageData.byDay[day].calls++;
-    usageData.byDay[day].cost += cost;
+
+    if(!usageData.byDay[day])    usageData.byDay[day]    = { calls:0, cost:0, in:0, out:0 };
+    usageData.byDay[day].calls++; usageData.byDay[day].cost += cost;
+    usageData.byDay[day].in += inTok; usageData.byDay[day].out += outTok;
+
+    if(!usageData.byHour[hour])  usageData.byHour[hour]  = { calls:0, cost:0 };
+    usageData.byHour[hour].calls++; usageData.byHour[hour].cost += cost;
+
+    if(!usageData.byMonth[month]) usageData.byMonth[month] = { calls:0, cost:0 };
+    usageData.byMonth[month].calls++; usageData.byMonth[month].cost += cost;
+
+    if(!usageData.bySource[source]) usageData.bySource[source] = { calls:0, cost:0 };
+    usageData.bySource[source].calls++; usageData.bySource[source].cost += cost;
+
     saveUsage();
     updateUsageIndicator();
+    if(currentScreen === 'usage') renderUsageDashboard();
+  }catch(e){}
+}
+// Record a notification cost reported by the worker (no token detail available)
+function recordNotificationCost(estCost){
+  try{
+    var c = estCost || 0;
+    var now = new Date();
+    var day = now.toISOString().split('T')[0];
+    var month = day.slice(0,7);
+    var hour = String(now.getHours());
+    usageData.calls++; usageData.cost += c;
+    if(!usageData.byDay[day]) usageData.byDay[day] = { calls:0, cost:0, in:0, out:0 };
+    usageData.byDay[day].calls++; usageData.byDay[day].cost += c;
+    if(!usageData.byHour[hour]) usageData.byHour[hour] = { calls:0, cost:0 };
+    usageData.byHour[hour].calls++; usageData.byHour[hour].cost += c;
+    if(!usageData.byMonth[month]) usageData.byMonth[month] = { calls:0, cost:0 };
+    usageData.byMonth[month].calls++; usageData.byMonth[month].cost += c;
+    if(!usageData.bySource.notification) usageData.bySource.notification = { calls:0, cost:0 };
+    usageData.bySource.notification.calls++; usageData.bySource.notification.cost += c;
+    saveUsage(); updateUsageIndicator();
+    if(currentScreen === 'usage') renderUsageDashboard();
   }catch(e){}
 }
 function updateUsageIndicator(){
@@ -1919,9 +1979,206 @@ function buildInsightsSection(){
 function closeUsageDetail(){ document.getElementById('usage-detail').style.display = 'none'; }
 function resetUsage(){
   if(confirm('Reset the usage counter to zero? This only clears the in-app estimate, not your Anthropic bill.')){
-    usageData = { calls:0, inTokens:0, outTokens:0, cost:0, byDay:{} };
+    usageData = { calls:0, inTokens:0, outTokens:0, cost:0, byDay:{}, byHour:{}, byMonth:{}, bySource:{} };
     saveUsage(); updateUsageIndicator(); closeUsageDetail();
+    if(currentScreen === 'usage') renderUsageDashboard();
   }
+}
+
+// ── Usage & Cost dashboard ────────────────────────────────────────────────────
+function fetchNotificationCosts(cb){
+  fetch('https://rinaworker.matt-low5599.workers.dev/notify-costs')
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if(res && res.costs){
+        var totalNotif = 0;
+        Object.keys(res.costs).forEach(function(day){
+          var c = res.costs[day] || 0; totalNotif += c;
+          if(!usageData.byDay[day]) usageData.byDay[day] = { calls:0, cost:0, in:0, out:0 };
+          usageData.byDay[day].notifCost = c;
+        });
+        usageData.bySource = usageData.bySource || {};
+        usageData.bySource.notification = { calls:(usageData.bySource.notification?usageData.bySource.notification.calls:0)||0, cost: totalNotif };
+        saveUsage();
+      }
+      if(cb) cb();
+    }).catch(function(){ if(cb) cb(); });
+}
+
+function setSgdRate(v){
+  var r = parseFloat(v);
+  if(r && r > 0){ USD_TO_SGD = r; try{ localStorage.setItem('rina_sgd_rate', String(r)); }catch(e){} renderUsageDashboard(); }
+}
+function fmtMoney(usd){
+  var sgd = usd * USD_TO_SGD;
+  return '<span style="font-weight:700;">$' + usd.toFixed(usd<1?3:2) + '</span> <span style="color:var(--t3);font-size:0.85em;">USD</span> · <span style="font-weight:700;color:#1A9D5C;">S$' + sgd.toFixed(sgd<1?3:2) + '</span>';
+}
+
+var SOURCE_META = {
+  classification: { label:'Email classification', color:'#1C7ED6' },
+  notification:   { label:'Phone notifications',  color:'#9333EA' },
+  brief:          { label:'Brief summaries',      color:'#0F6E56' },
+  draft:          { label:'Draft generation',     color:'#C2410C' },
+  refine:         { label:'Draft refine',         color:'#B45309' },
+  other:          { label:'Other',                color:'#888780' }
+};
+
+function renderUsageDashboard(){
+  var el = document.getElementById('usage-dashboard');
+  if(!el) return;
+  var today = new Date().toISOString().split('T')[0];
+  var month = today.slice(0,7);
+  var todayData  = usageData.byDay[today]  || { calls:0, cost:0 };
+  var monthData  = usageData.byMonth[month]|| { calls:0, cost:0 };
+
+  // ----- summary cards -----
+  var html = '';
+  html += '<div class="slbl" style="margin-bottom:10px;">Usage &amp; cost</div>';
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">' +
+    '<span style="font-size:11px;color:var(--t3);">USD → SGD rate</span>' +
+    '<input type="number" step="0.01" value="' + USD_TO_SGD + '" onchange="setSgdRate(this.value)" style="width:80px;padding:5px 8px;border:1px solid var(--b2);border-radius:7px;background:var(--bg1);color:var(--t1);font-size:12px;" />' +
+    '<span style="font-size:10px;color:var(--t3);">Edit if the rate changes</span></div>';
+
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">';
+  html += usageCard('Today', todayData.cost, todayData.calls);
+  html += usageCard('This month', monthData.cost, monthData.calls);
+  html += usageCard('All time', usageData.cost||0, usageData.calls||0);
+  html += '</div>';
+
+  // ----- cost by source (pie) -----
+  html += '<div style="background:var(--bg1);border:1px solid var(--b1);border-radius:12px;padding:16px;margin-bottom:14px;">';
+  html += '<div style="font-size:12px;font-weight:600;color:var(--t1);margin-bottom:12px;">Cost by feature (all time)</div>';
+  html += '<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">' + buildPie() + '</div>';
+  html += '</div>';
+
+  // ----- daily trend (bar) -----
+  html += '<div style="background:var(--bg1);border:1px solid var(--b1);border-radius:12px;padding:16px;margin-bottom:14px;">';
+  html += '<div style="font-size:12px;font-weight:600;color:var(--t1);margin-bottom:12px;">Daily cost — last 14 days</div>';
+  html += buildDailyBars();
+  html += '</div>';
+
+  // ----- hourly distribution -----
+  html += '<div style="background:var(--bg1);border:1px solid var(--b1);border-radius:12px;padding:16px;margin-bottom:14px;">';
+  html += '<div style="font-size:12px;font-weight:600;color:var(--t1);margin-bottom:12px;">When cost happens — by hour of day</div>';
+  html += buildHourlyBars();
+  html += '</div>';
+
+  // ----- monthly table -----
+  html += '<div style="background:var(--bg1);border:1px solid var(--b1);border-radius:12px;padding:16px;margin-bottom:14px;">';
+  html += '<div style="font-size:12px;font-weight:600;color:var(--t1);margin-bottom:10px;">Monthly totals</div>';
+  html += buildMonthlyTable();
+  html += '</div>';
+
+  html += '<button class="btn" style="font-size:11px;" onclick="resetUsage()">Reset all usage data</button>';
+  html += '<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.5;">Estimated from token usage at standard Anthropic API prices (Haiku $1/$5, Sonnet $3/$15 per million in/out tokens). Phone-notification classifications run on the worker and are estimated. SGD converted at your set rate. Actual Anthropic billing may differ slightly.</div>';
+
+  el.innerHTML = html;
+}
+
+function usageCard(label, usd, calls){
+  var sgd = usd * USD_TO_SGD;
+  return '<div style="background:var(--bg2);border-radius:11px;padding:13px;">' +
+    '<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--t3);">' + label + '</div>' +
+    '<div style="font-size:20px;font-weight:700;color:var(--t1);margin-top:4px;">S$' + sgd.toFixed(2) + '</div>' +
+    '<div style="font-size:10px;color:var(--t3);margin-top:1px;">$' + usd.toFixed(2) + ' USD · ' + calls + ' calls</div>' +
+    '</div>';
+}
+
+function buildPie(){
+  var sources = Object.keys(usageData.bySource||{});
+  var total = 0;
+  sources.forEach(function(s){ total += usageData.bySource[s].cost; });
+  if(total <= 0) return '<div style="font-size:11px;color:var(--t3);">No usage recorded yet.</div>';
+  // sort by cost desc
+  sources.sort(function(a,b){ return usageData.bySource[b].cost - usageData.bySource[a].cost; });
+  var r = 52, cx = 60, cy = 60, circ = 2*Math.PI*r;
+  var offset = 0;
+  var ring = '';
+  sources.forEach(function(s){
+    var frac = usageData.bySource[s].cost / total;
+    var meta = SOURCE_META[s] || SOURCE_META.other;
+    var len = frac * circ;
+    ring += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + meta.color + '" stroke-width="16" ' +
+      'stroke-dasharray="' + len + ' ' + (circ-len) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"></circle>';
+    offset += len;
+  });
+  var svg = '<svg width="120" height="120" viewBox="0 0 120 120" style="flex-shrink:0;">' + ring +
+    '<text x="60" y="58" text-anchor="middle" font-size="10" fill="var(--t3)">total</text>' +
+    '<text x="60" y="72" text-anchor="middle" font-size="12" font-weight="700" fill="var(--t1)">S$' + (total*USD_TO_SGD).toFixed(2) + '</text></svg>';
+  // legend
+  var legend = '<div style="flex:1;min-width:180px;">';
+  sources.forEach(function(s){
+    var meta = SOURCE_META[s] || SOURCE_META.other;
+    var c = usageData.bySource[s].cost;
+    var pct = Math.round(c/total*100);
+    legend += '<div style="display:flex;align-items:center;gap:8px;font-size:11.5px;padding:3px 0;">' +
+      '<span style="width:10px;height:10px;border-radius:3px;background:' + meta.color + ';flex-shrink:0;"></span>' +
+      '<span style="color:var(--t2);flex:1;">' + meta.label + '</span>' +
+      '<span style="color:var(--t3);">' + pct + '%</span>' +
+      '<span style="color:var(--t1);font-weight:600;min-width:64px;text-align:right;">S$' + (c*USD_TO_SGD).toFixed(2) + '</span>' +
+      '</div>';
+  });
+  legend += '</div>';
+  return svg + legend;
+}
+
+function buildDailyBars(){
+  var days = [];
+  for(var i=13;i>=0;i--){
+    var d = new Date(); d.setDate(d.getDate()-i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  var max = 0;
+  days.forEach(function(d){ var c=(usageData.byDay[d]&&usageData.byDay[d].cost)||0; if(c>max) max=c; });
+  if(max<=0) return '<div style="font-size:11px;color:var(--t3);">No usage in the last 14 days.</div>';
+  var bars = '';
+  days.forEach(function(d){
+    var c = (usageData.byDay[d]&&usageData.byDay[d].cost)||0;
+    var h = Math.round((c/max)*90);
+    var sgd = c*USD_TO_SGD;
+    var dd = d.slice(8,10) + '/' + d.slice(5,7);
+    bars += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;" title="' + d + ': S$' + sgd.toFixed(3) + '">' +
+      '<div style="font-size:8px;color:var(--t3);">' + (c>0?('S$'+sgd.toFixed(2)):'') + '</div>' +
+      '<div style="width:70%;height:' + Math.max(h,2) + 'px;background:linear-gradient(180deg,#1C7ED6,#0A4099);border-radius:3px 3px 0 0;"></div>' +
+      '<div style="font-size:8px;color:var(--t3);transform:rotate(-45deg);white-space:nowrap;margin-top:3px;">' + dd + '</div>' +
+      '</div>';
+  });
+  return '<div style="display:flex;align-items:flex-end;gap:3px;height:130px;padding-top:6px;">' + bars + '</div>';
+}
+
+function buildHourlyBars(){
+  var max = 0;
+  for(var h=0;h<24;h++){ var c=(usageData.byHour[h]&&usageData.byHour[h].cost)||0; if(c>max) max=c; }
+  if(max<=0) return '<div style="font-size:11px;color:var(--t3);">No hourly data yet.</div>';
+  var bars = '';
+  for(var h=0;h<24;h++){
+    var c = (usageData.byHour[h]&&usageData.byHour[h].cost)||0;
+    var ht = Math.round((c/max)*70);
+    bars += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;" title="' + h + ':00 — S$' + (c*USD_TO_SGD).toFixed(3) + '">' +
+      '<div style="width:80%;height:' + Math.max(ht,2) + 'px;background:#9333EA;border-radius:2px 2px 0 0;opacity:' + (c>0?0.9:0.25) + ';"></div>' +
+      (h%3===0 ? '<div style="font-size:7.5px;color:var(--t3);">' + h + '</div>' : '<div style="font-size:7.5px;color:transparent;">.</div>') +
+      '</div>';
+  }
+  return '<div style="display:flex;align-items:flex-end;gap:2px;height:95px;">' + bars + '</div>' +
+    '<div style="font-size:9px;color:var(--t3);text-align:center;margin-top:4px;">Hour of day (0–23, your local time)</div>';
+}
+
+function buildMonthlyTable(){
+  var months = Object.keys(usageData.byMonth||{}).sort().reverse();
+  if(!months.length) return '<div style="font-size:11px;color:var(--t3);">No monthly data yet.</div>';
+  var rows = '';
+  months.forEach(function(m){
+    var v = usageData.byMonth[m];
+    var sgd = v.cost*USD_TO_SGD;
+    var dt = new Date(m+'-01');
+    var name = dt.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    rows += '<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:7px 0;border-bottom:1px solid var(--b1);">' +
+      '<span style="color:var(--t2);">' + name + '</span>' +
+      '<span style="color:var(--t3);">' + v.calls + ' calls</span>' +
+      '<span style="color:var(--t1);font-weight:600;min-width:120px;text-align:right;">S$' + sgd.toFixed(2) + ' · $' + v.cost.toFixed(2) + '</span>' +
+      '</div>';
+  });
+  return rows;
 }
 
 function classifyEmails(emails){
@@ -1943,7 +2200,7 @@ function classifyEmails(emails){
       })
     }).then(function(r){ return r.json(); })
       .then(function(data){
-        recordUsage('claude-haiku-4-5-20251001', data);
+        recordUsage('claude-haiku-4-5-20251001', data, 'classification');
         if(data.error){
           console.warn('Classification API error:', data.error, data.error_description||'');
           return Object.assign({}, msg, { scenario:'flag', requestSummary:'Could not classify (API error) — review manually', _classifyError:true });
@@ -2327,7 +2584,7 @@ function summariseEmail(emailId, summaryId){
     })
   }).then(function(r){ return r.json(); })
     .then(function(data){
-      recordUsage('claude-sonnet-4-6', data);
+      recordUsage('claude-sonnet-4-6', data, 'brief');
       if(data.error){ panel.innerHTML = '<div style="color:var(--t3);">Could not summarise (API error). Check your API key.</div>'; return; }
       var text = (data.content && data.content[0] && data.content[0].text) || 'Unable to summarise this email.';
       var formatted = escHtml(text)
@@ -2572,7 +2829,7 @@ function generateDraft(wf, idx, step){
     })
   }).then(function(r){ return r.json(); })
     .then(function(data){
-      recordUsage('claude-sonnet-4-6', data);
+      recordUsage('claude-sonnet-4-6', data, 'draft');
       var text = (data.content && data.content[0] && data.content[0].text) || getDraftTemplate(wf, step.draftKey);
       wf.drafts[step.draftKey] = text.trim();
       renderWorkflows();
@@ -2650,7 +2907,7 @@ function refineDraft(emailId, stepIdx){
     })
   }).then(function(r){ return r.json(); })
     .then(function(data){
-      recordUsage('claude-sonnet-4-6', data);
+      recordUsage('claude-sonnet-4-6', data, 'refine');
       var text = (data.content && data.content[0] && data.content[0].text) || draft;
       wf.drafts[step.draftKey] = text.trim();
       renderWorkflows();
