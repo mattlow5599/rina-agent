@@ -703,7 +703,14 @@ body.dark .draft-ph{color:#FAC775;}
                 <button onclick="resetStartTimestamp()" style="font-size:10px;color:var(--nv);background:none;border:1px solid var(--nv);border-radius:4px;cursor:pointer;padding:2px 8px;margin-left:auto;">Reset to now</button>
               </div>
               <div id="start-ts-display" style="font-size:11px;color:var(--t3);padding:6px 10px;border:1px solid var(--b1);border-radius:var(--radius-md);background:var(--bg1);"></div>
-              <div style="font-size:10px;color:var(--t3);margin-top:4px;">Emails received before this time are ignored. Click "Reset to now" to start fresh.</div>
+              <div style="font-size:10px;color:var(--t3);margin-top:4px;">Emails received before this time are ignored. Set it earlier to catch recent emails.</div>
+              <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+                <input type="datetime-local" id="start-ts-input" style="padding:6px 8px;border:1px solid var(--b2);border-radius:6px;background:var(--bg1);color:var(--t1);font-size:11px;" />
+                <button class="btn btn-n" style="font-size:10px;" onclick="applyStartTimestamp()">Set</button>
+                <button class="btn" style="font-size:10px;" onclick="setStartBack(1)">−1 day</button>
+                <button class="btn" style="font-size:10px;" onclick="setStartBack(3)">−3 days</button>
+                <button class="btn" style="font-size:10px;" onclick="setStartBack(7)">−7 days</button>
+              </div>
             </div>
                 <button onclick="clearSuppressedSubjects()" style="font-size:10px;color:#B91C1C;background:none;border:1px solid #B91C1C;border-radius:4px;cursor:pointer;padding:2px 8px;margin-left:auto;">Clear all</button>
               </div>
@@ -2524,6 +2531,29 @@ function resetStartTimestamp(){
   updateStats();
   renderEmails();
   showToast('Start time reset. Old emails cleared.');
+}
+
+// Set the monitoring start to a specific datetime (from the picker)
+function applyStartTimestamp(){
+  var inp = document.getElementById('start-ts-input');
+  if(!inp || !inp.value){ showToast('Pick a date and time first'); return; }
+  var ts = new Date(inp.value).toISOString();
+  localStorage.setItem('rina_start_ts', ts);
+  renderStartTimestamp();
+  state.emails = []; state.notifications = []; state.workflows = [];
+  updateStats(); renderEmails();
+  showToast('Start time updated. Tap "Scan now" to pull emails since then.');
+}
+
+// Quick preset: set start time N days back from now
+function setStartBack(days){
+  var d = new Date();
+  d.setDate(d.getDate() - days);
+  localStorage.setItem('rina_start_ts', d.toISOString());
+  renderStartTimestamp();
+  state.emails = []; state.notifications = []; state.workflows = [];
+  updateStats(); renderEmails();
+  showToast('Now monitoring from ' + days + ' day(s) ago. Tap "Scan now".');
 }
 
 function renderStartTimestamp(){
