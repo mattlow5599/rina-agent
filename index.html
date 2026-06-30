@@ -1607,19 +1607,32 @@ function scanNow(){
   dropboxRead('emails.json').then(function(msgs){
     setLiveStatus(true, 'Monitoring mailbox — live');
     msgs = msgs || [];
+    // ── DIAGNOSTICS ──
+    console.log('[SCAN] emails.json contained', msgs.length, 'total emails');
+    if(msgs.length){
+      var rcv = function(e){ return e.received || e.receivedDateTime || ''; };
+      var sorted = msgs.slice().sort(function(a,b){ return rcv(b).localeCompare(rcv(a)); });
+      console.log('[SCAN] most recent email in file:', rcv(sorted[0]), '—', (sorted[0].subject||'').slice(0,50));
+      console.log('[SCAN] monitoring start time:', new Date(getStartTimestamp()).toISOString());
+    }
+    var alreadyHave = 0, cleared = 0;
     var newEmails = msgs.filter(function(m){
-      if(state.emails.find(function(e){ return e.id === m.id; })) return false;
-      if(seenClearedIds.indexOf(m.id) !== -1) return false; // already seen & cleared
+      if(state.emails.find(function(e){ return e.id === m.id; })){ alreadyHave++; return false; }
+      if(seenClearedIds.indexOf(m.id) !== -1){ cleared++; return false; } // already seen & cleared
       return true;
     });
+    console.log('[SCAN] new (not already loaded/cleared):', newEmails.length, '| alreadyHave:', alreadyHave, '| cleared:', cleared);
     // Filter emails received before the app start timestamp
+    var tooOld = 0;
     newEmails = newEmails.filter(function(m){
       if(isEmailTooOld(m)){
+        tooOld++;
         state.emails.push(Object.assign({},m,{scenario:'none',isRead:true}));
         return false;
       }
       return true;
     });
+    console.log('[SCAN] filtered as too old (before start time):', tooOld, '| remaining to process:', newEmails.length);
     // ── Analytics counters for this scan ──
     var scanStats = { total:newEmails.length, blocked:0, ownReply:0, colleague:0, suppressed:0, autoNoAction:0, classified:0 };
 
